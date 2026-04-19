@@ -19,6 +19,7 @@ struct GameStateData
     bool hasKey;
     bool soundEnabled;
     char playerName[Config::MAX_PLAYER_NAME_LENGTH + 1];
+    int mouseX, mouseY;  // current mouse position in OpenGL coords (y=0 at bottom)
 
     GameStateData();
     void reset();

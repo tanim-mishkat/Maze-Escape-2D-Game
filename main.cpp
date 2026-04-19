@@ -5,8 +5,9 @@
 #include "core/game.h"
 #include "core/config.h"
 
-// Global game instance
-Game* game = nullptr;
+// Single game instance — static avoids heap allocation and the broken delete-after-glutMainLoop pattern
+static Game gameInstance;
+static Game* game = nullptr;
 
 // Window dimensions
 int windowWidth = Config::DEFAULT_WINDOW_WIDTH;
@@ -90,6 +91,25 @@ void specialUp(int key, int x, int y)
     }
 }
 
+void mouseClick(int button, int state, int x, int y)
+{
+    if (game && button == GLUT_LEFT_BUTTON && state == GLUT_UP)
+    {
+        // GLUT gives y from top; OpenGL has y from bottom
+        game->handleMouseClick(x, windowHeight - y);
+        glutPostRedisplay();
+    }
+}
+
+void mouseMove(int x, int y)
+{
+    if (game)
+    {
+        game->handleMouseMove(x, windowHeight - y);
+        glutPostRedisplay();
+    }
+}
+
 void update()
 {
     if (game)
@@ -122,19 +142,19 @@ int main(int argc, char** argv)
     glutKeyboardUpFunc(keyboardUp);
     glutSpecialFunc(specialDown);
     glutSpecialUpFunc(specialUp);
+    glutMouseFunc(mouseClick);
+    glutPassiveMotionFunc(mouseMove);  // hover without button held
+    glutMotionFunc(mouseMove);         // hover with button held
     glutIdleFunc(update);
 
     // Initialize game
-    game = new Game();
+    game = &gameInstance;
     game->init();
 
     reshape(windowWidth, windowHeight);
 
     // Start main loop
     glutMainLoop();
-
-    // Cleanup
-    delete game;
 
     return 0;
 }

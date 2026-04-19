@@ -1,16 +1,28 @@
 #include "text.h"
 #include <GL/freeglut.h>
+#include <string>
+#include <unordered_map>
 
 namespace TextRenderer
 {
+    static std::unordered_map<std::string, int> widthCache;
+
+    void clearWidthCache()
+    {
+        widthCache.clear();
+    }
+
     int getTextWidth(const char* text)
     {
+        auto it = widthCache.find(text);
+        if (it != widthCache.end())
+            return it->second;
+
         int width = 0;
-        while (*text != '\0')
-        {
-            width += glutBitmapWidth(GLUT_BITMAP_HELVETICA_18, *text);
-            text++;
-        }
+        for (const char* p = text; *p != '\0'; ++p)
+            width += glutBitmapWidth(GLUT_BITMAP_HELVETICA_18, *p);
+
+        widthCache[text] = width;
         return width;
     }
 

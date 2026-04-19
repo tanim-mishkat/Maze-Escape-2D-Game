@@ -1,7 +1,10 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-echo Building Maze Runner...
+set "BUILD_TYPE=release"
+if /i "%1"=="debug" set "BUILD_TYPE=debug"
+
+echo Building Maze Runner [%BUILD_TYPE%]...
 
 set "CXX=g++"
 set "EXTRA_INCLUDES="
@@ -14,31 +17,21 @@ if exist "C:\msys64\ucrt64\bin\g++.exe" (
     echo Using MSYS2 UCRT toolchain: !CXX!
 )
 
+set "OPT_FLAGS=-O2"
+if /i "%BUILD_TYPE%"=="debug" set "OPT_FLAGS=-g -O0"
+
+set "SOURCES=main.cpp core/game.cpp core/gamestate.cpp gameplay/player.cpp gameplay/maze.cpp gameplay/collision.cpp gameplay/level.cpp gameplay/generator.cpp render/renderer.cpp render/text.cpp ui/hud.cpp ui/menu.cpp ui/overlay.cpp data/highscore.cpp data/leveldata.cpp utils/coords.cpp utils/timer.cpp"
+
 "%CXX%" -o maze_runner.exe ^
-    main.cpp ^
-    core/game.cpp ^
-    core/gamestate.cpp ^
-    gameplay/player.cpp ^
-    gameplay/maze.cpp ^
-    gameplay/collision.cpp ^
-    gameplay/level.cpp ^
-    gameplay/generator.cpp ^
-    render/renderer.cpp ^
-    render/text.cpp ^
-    ui/hud.cpp ^
-    ui/menu.cpp ^
-    ui/overlay.cpp ^
-    data/highscore.cpp ^
-    data/leveldata.cpp ^
-    utils/coords.cpp ^
-    utils/timer.cpp ^
+    %SOURCES% ^
     %EXTRA_INCLUDES% ^
     %EXTRA_LIBS% ^
     -lfreeglut -lopengl32 -lglu32 -lwinmm -lgdi32 ^
-    -std=c++11 -O2
+    -std=c++11 %OPT_FLAGS% ^
+    -Wall -Wextra -Wno-unused-parameter
 
 if %errorlevel% equ 0 (
-    echo Build successful!
+    echo Build successful! [%BUILD_TYPE%]
     echo Run with: maze_runner.exe
 ) else (
     echo Build failed!

@@ -13,6 +13,7 @@ public:
     Game();
 
     void init();
+    void setWindowSize(int w, int h) { cachedWinW = w; cachedWinH = h; }
     void update();
     void render(int windowWidth, int windowHeight);
 
@@ -21,6 +22,8 @@ public:
     void handleKeyUp(unsigned char key);
     void handleSpecialDown(int key);
     void handleSpecialUp(int key);
+    void handleMouseClick(int x, int y);  // x,y in OpenGL coords (y=0 at bottom)
+    void handleMouseMove(int x, int y);
 
     // Game flow
     void startNewRun(int levelIndex);
@@ -33,6 +36,13 @@ public:
     void appendPlayerNameCharacter(unsigned char key);
     void removeLastPlayerNameCharacter();
     void ensurePlayerName();
+
+    // Settings persistence
+    void saveSettings();
+    void loadSettings();
+
+    // Window size (cached from last render call, used by mouse handlers)
+    int cachedWinW, cachedWinH;
 
     // Getters
     const GameStateData& getState() const { return gameState; }

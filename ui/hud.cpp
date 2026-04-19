@@ -70,20 +70,21 @@ namespace HUD
                                         "Find the key, reach the exit!",
                                         0.82f, 0.92f, 1.0f);
 
-        drawInfoCard(innerX, panelY + Config::BOARD_HEIGHT - 140.0f, cardWidth, 72.0f,
+        float top = panelY + Config::BOARD_HEIGHT;
+        drawInfoCard(innerX, top - Config::HUD_CARD_PLAYER_OFFSET, cardWidth, Config::HUD_CARD_HEIGHT_TALL,
                     "Player", gameState.playerName, 0.58f, 0.90f, 0.98f);
-        drawInfoCard(innerX, panelY + Config::BOARD_HEIGHT - 224.0f, halfWidth, 66.0f,
+        drawInfoCard(innerX, top - Config::HUD_CARD_STAGE_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
                     "Stage", levelText, 0.72f, 0.84f, 1.0f);
-        drawInfoCard(innerX + halfWidth + 10.0f, panelY + Config::BOARD_HEIGHT - 224.0f,
-                    halfWidth, 66.0f, "Timer", timerText, 0.96f, 0.82f, 0.44f);
-        drawInfoCard(innerX, panelY + Config::BOARD_HEIGHT - 302.0f, halfWidth, 66.0f,
+        drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_STAGE_OFFSET,
+                    halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Timer", timerText, 0.96f, 0.82f, 0.44f);
+        drawInfoCard(innerX, top - Config::HUD_CARD_SCORE_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
                     "Score", scoreText, 0.70f, 0.95f, 0.74f);
-        drawInfoCard(innerX + halfWidth + 10.0f, panelY + Config::BOARD_HEIGHT - 302.0f,
-                    halfWidth, 66.0f, "Lives", livesText, 1.0f, 0.78f, 0.72f);
-        drawInfoCard(innerX, panelY + Config::BOARD_HEIGHT - 380.0f, halfWidth, 66.0f,
+        drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_LIVES_OFFSET,
+                    halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Lives", livesText, 1.0f, 0.78f, 0.72f);
+        drawInfoCard(innerX, top - Config::HUD_CARD_KEY_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
                     "Key", keyText, 1.0f, 0.84f, 0.0f);
-        drawInfoCard(innerX + halfWidth + 10.0f, panelY + Config::BOARD_HEIGHT - 380.0f,
-                    halfWidth, 66.0f, "Best", bestText, 0.98f, 0.92f, 0.58f);
+        drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_BEST_OFFSET,
+                    halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Best", bestText, 0.98f, 0.92f, 0.58f);
 
         drawPanel(innerX, panelY + 18.0f, cardWidth, 160.0f, 0.84f, 0.92f, 1.0f, 0.78f);
         TextRenderer::drawTextWithShadow(innerX + 14.0f, panelY + 146.0f, "Controls",

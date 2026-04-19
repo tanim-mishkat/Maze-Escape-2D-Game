@@ -38,6 +38,14 @@ namespace Config
     constexpr float WALL_DENSITY_INCREMENT = 0.05f;
     constexpr int MIN_PATH_LENGTH = 15;
     
+    // Key codes
+    constexpr unsigned char KEY_ESC   = 27;
+    constexpr unsigned char KEY_ENTER = 13;
+    constexpr unsigned char KEY_BACKSPACE = 8;
+
+    // Settings persistence
+    constexpr char SETTINGS_FILE[] = "maze_settings.txt";
+
     // Rendering constants
     constexpr float BOARD_PADDING = 6.0f;
     constexpr float BOARD_BORDER_WIDTH = 1.5f;
@@ -45,6 +53,16 @@ namespace Config
     constexpr float SIDEBAR_MARGIN = 24.0f;
     constexpr float TILE_INNER_PADDING = 4.0f;
     constexpr float TILE_INNER_SIZE = TILE_SIZE - 8.0f;
+
+    // HUD card layout offsets (from panel top)
+    constexpr float HUD_CARD_PLAYER_OFFSET  = 140.0f;
+    constexpr float HUD_CARD_STAGE_OFFSET   = 224.0f;
+    constexpr float HUD_CARD_SCORE_OFFSET   = 302.0f;
+    constexpr float HUD_CARD_LIVES_OFFSET   = 302.0f;
+    constexpr float HUD_CARD_KEY_OFFSET     = 380.0f;
+    constexpr float HUD_CARD_BEST_OFFSET    = 380.0f;
+    constexpr float HUD_CARD_HEIGHT_TALL    = 72.0f;
+    constexpr float HUD_CARD_HEIGHT_SHORT   = 66.0f;
 }
 
 #endif // CONFIG_H

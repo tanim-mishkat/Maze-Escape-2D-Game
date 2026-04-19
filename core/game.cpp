@@ -8,17 +8,58 @@
 #include <GL/freeglut.h>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio>
 #include <ctime>
 
-Game::Game()
+namespace
+{
+    bool inRect(int px, int py, float rx, float ry, float rw, float rh)
+    {
+        return px >= static_cast<int>(rx) && px <= static_cast<int>(rx + rw)
+            && py >= static_cast<int>(ry) && py <= static_cast<int>(ry + rh);
+    }
+}
+
+Game::Game() : cachedWinW(1180), cachedWinH(720)
 {
 }
 
 void Game::init()
 {
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    loadSettings();
     highScores.load();
     returnToMainMenu();
+}
+
+void Game::saveSettings()
+{
+    FILE* f = std::fopen(Config::SETTINGS_FILE, "w");
+    if (!f) return;
+    std::fprintf(f, "SOUND=%d\n", gameState.soundEnabled ? 1 : 0);
+    std::fprintf(f, "NAME=%s\n", gameState.playerName);
+    std::fclose(f);
+}
+
+void Game::loadSettings()
+{
+    FILE* f = std::fopen(Config::SETTINGS_FILE, "r");
+    if (!f) return;
+    char line[64];
+    while (std::fgets(line, sizeof(line), f))
+    {
+        // strip trailing newline
+        char* nl = std::strchr(line, '\n');
+        if (nl) *nl = '\0';
+        char* cr = std::strchr(line, '\r');
+        if (cr) *cr = '\0';
+
+        if (std::strncmp(line, "SOUND=", 6) == 0)
+            gameState.soundEnabled = (line[6] == '1');
+        else if (std::strncmp(line, "NAME=", 5) == 0 && line[5] != '\0')
+            std::snprintf(gameState.playerName, sizeof(gameState.playerName), "%s", line + 5);
+    }
+    std::fclose(f);
 }
 
 void Game::update()
@@ -28,6 +69,8 @@ void Game::update()
 
 void Game::render(int windowWidth, int windowHeight)
 {
+    cachedWinW = windowWidth;
+    cachedWinH = windowHeight;
     glClear(GL_COLOR_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -316,13 +359,13 @@ void Game::ensurePlayerName()
 {
     if (gameState.playerName[0] == '\0')
     {
-        std::strcpy(gameState.playerName, "PLAYER");
+        std::snprintf(gameState.playerName, sizeof(gameState.playerName), "PLAYER");
     }
 }
 
 void Game::handleKeyDown(unsigned char key)
 {
-    if (key == 27) // ESC
+    if (key == Config::KEY_ESC)
     {
         if (gameState.state == STATE_PLAYING)
         {
@@ -365,7 +408,7 @@ void Game::handleKeyDown(unsigned char key)
         {
             gameState.menuSelection = 3;
         }
-        else if (key == 13) // Enter
+        else if (key == Config::KEY_ENTER)
         {
             if (gameState.menuSelection == 0)
             {
@@ -388,11 +431,33 @@ void Game::handleKeyDown(unsigned char key)
     }
 
     // How to play / settings
-    if (gameState.state == STATE_HOW_TO_PLAY || gameState.state == STATE_SETTINGS)
+    if (gameState.state == STATE_HOW_TO_PLAY)
     {
-        if (key == 13)
+        if (key == Config::KEY_ENTER)
         {
             returnToMainMenu();
+        }
+        return;
+    }
+
+    if (gameState.state == STATE_SETTINGS)
+    {
+        if (key == Config::KEY_ENTER)
+        {
+            saveSettings();
+            returnToMainMenu();
+        }
+        else if (key == 's' || key == 'S')
+        {
+            gameState.soundEnabled = !gameState.soundEnabled;
+        }
+        else if (key == Config::KEY_BACKSPACE)
+        {
+            removeLastPlayerNameCharacter();
+        }
+        else
+        {
+            appendPlayerNameCharacter(key);
         }
         return;
     }
@@ -431,13 +496,23 @@ void Game::handleKeyDown(unsigned char key)
     
     if (key == 'r' || key == 'R')
     {
-        if (gameState.state == STATE_PLAYING || gameState.state == STATE_GAME_OVER)
+        if (gameState.state == STATE_PLAYING || gameState.state == STATE_GAME_OVER
+            || gameState.state == STATE_CAMPAIGN_WON)
         {
-            startLevel(gameState.currentLevelIndex);
+            startNewRun(gameState.selectedStartLevelIndex);
         }
         return;
     }
-    
+
+    if (key == 'q' || key == 'Q')
+    {
+        if (gameState.state == STATE_GAME_OVER || gameState.state == STATE_CAMPAIGN_WON)
+        {
+            glutLeaveMainLoop();
+        }
+        return;
+    }
+
     if (key == 'm' || key == 'M')
     {
         returnToMainMenu();
@@ -558,5 +633,88 @@ void Game::handleSpecialUp(int key)
     else if (key == GLUT_KEY_RIGHT)
     {
         player.setMoveRight(false);
+    }
+}
+
+void Game::handleMouseMove(int x, int y)
+{
+    gameState.mouseX = x;
+    gameState.mouseY = y;
+}
+
+void Game::handleMouseClick(int x, int y)
+{
+    gameState.mouseX = x;
+    gameState.mouseY = y;
+
+    if (gameState.state == STATE_MAIN_MENU)
+    {
+        float panelW = 600.0f, panelH = 500.0f;
+        float panelX = (cachedWinW - panelW) / 2.0f;
+        float panelY = (cachedWinH - panelH) / 2.0f;
+        float optX = panelX + 40.0f;
+        float optW = panelW - 80.0f;
+        float optY = panelY + panelH - 160.0f;
+
+        for (int i = 0; i < 4; i++)
+        {
+            float oy = optY - i * 50.0f;
+            if (inRect(x, y, optX, oy, optW, 40.0f))
+            {
+                gameState.menuSelection = i;
+                if (i == 0)      startNewRun(0);
+                else if (i == 1) gameState.state = STATE_HOW_TO_PLAY;
+                else if (i == 2) gameState.state = STATE_SETTINGS;
+                else             glutLeaveMainLoop();
+                return;
+            }
+        }
+    }
+    else if (gameState.state == STATE_SETTINGS)
+    {
+        float panelW = 560.0f, panelH = 360.0f;
+        float panelX = (cachedWinW - panelW) / 2.0f;
+        float panelY = (cachedWinH - panelH) / 2.0f;
+        float optY = panelY + panelH - 120.0f;
+
+        // Sound toggle row
+        if (inRect(x, y, panelX + 40.0f, optY - 20.0f, panelW - 80.0f, 60.0f))
+            gameState.soundEnabled = !gameState.soundEnabled;
+    }
+    else if (gameState.state == STATE_PAUSED)
+    {
+        float panelW = 400.0f, panelH = 320.0f;
+        float panelX = (cachedWinW - panelW) / 2.0f;
+        float panelY = (cachedWinH - panelH) / 2.0f;
+        float btnX = panelX + 40.0f, btnW = panelW - 80.0f;
+        float baseY = panelY + panelH - 120.0f;
+
+        if      (inRect(x, y, btnX, baseY,        btnW, 34.0f)) resumeGame();
+        else if (inRect(x, y, btnX, baseY - 44.0f, btnW, 34.0f)) startLevel(gameState.currentLevelIndex);
+        else if (inRect(x, y, btnX, baseY - 88.0f, btnW, 34.0f)) returnToMainMenu();
+        else if (inRect(x, y, btnX, baseY - 132.0f, btnW, 34.0f)) glutLeaveMainLoop();
+    }
+    else if (gameState.state == STATE_LEVEL_CLEARED)
+    {
+        float panelW = 420.0f, panelH = 160.0f;
+        float panelX = (cachedWinW - panelW) / 2.0f;
+        float panelY = (cachedWinH - panelH) / 2.0f;
+        // Click anywhere on the overlay → next level
+        if (inRect(x, y, panelX, panelY, panelW, panelH))
+            startLevel(gameState.currentLevelIndex + 1);
+    }
+    else if (gameState.state == STATE_CAMPAIGN_WON || gameState.state == STATE_GAME_OVER)
+    {
+        float panelW = 460.0f, panelH = 340.0f;
+        float panelX = (cachedWinW - panelW) / 2.0f;
+        float panelY = (cachedWinH - panelH) / 2.0f;
+        float btnY = panelY + 14.0f, btnH = 30.0f;
+
+        // Replay button (left)
+        if (inRect(x, y, panelX + 30.0f, btnY, 160.0f, btnH))
+            startNewRun(gameState.selectedStartLevelIndex);
+        // Menu button (right)
+        else if (inRect(x, y, panelX + 210.0f, btnY, 160.0f, btnH))
+            returnToMainMenu();
     }
 }

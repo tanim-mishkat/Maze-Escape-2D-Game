@@ -1,5 +1,6 @@
 #include "gamestate.h"
 #include <cstring>
+#include <cstdio>
 
 GameStateData::GameStateData()
     : state(STATE_MAIN_MENU),
@@ -12,9 +13,11 @@ GameStateData::GameStateData()
       levelClearBonus(0),
       scoreSaved(false),
       hasKey(false),
-      soundEnabled(true)
+      soundEnabled(true),
+      mouseX(0),
+      mouseY(0)
 {
-    std::strcpy(playerName, "PLAYER");
+    std::snprintf(playerName, sizeof(playerName), "PLAYER");
 }
 
 void GameStateData::reset()

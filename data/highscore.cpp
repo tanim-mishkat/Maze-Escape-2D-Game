@@ -91,15 +91,15 @@ void HighScoreManager::add(const char* playerName, int score)
         }
     }
 
-    if (count < Config::MAX_HIGH_SCORES)
-    {
-        count++;
-    }
-
     if (insertIndex >= Config::MAX_HIGH_SCORES)
     {
         save();
         return;
+    }
+
+    if (count < Config::MAX_HIGH_SCORES)
+    {
+        count++;
     }
 
     for (int i = count - 1; i > insertIndex; i--)
