@@ -1,0 +1,27 @@
+# Local tool configuration
+/.claude/
+/.vscode/
+
+# Local runtime / personal data
+/maze_settings.txt
+/maze_highscores.txt
+/viva_prep
+
+# Common local or sensitive config
+.env
+.env.*
+*.local
+
+# Build outputs
+*.exe
+*.dll
+*.obj
+*.o
+*.out
+*.pdb
+*.ilk
+*.lib
+
+# OS-generated files
+Thumbs.db
+.DS_Store

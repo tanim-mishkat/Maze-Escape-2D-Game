@@ -1,261 +1,476 @@
-# Maze Runner
+# MAZE RUNNER
 
-Maze Runner is a 2D maze escape game built with C++, OpenGL, and FreeGLUT. The project uses procedurally generated tile mazes, a sidebar HUD, keyboard and mouse driven menus, and plain-text persistence for settings and high scores.
+MAZE RUNNER is a 2D procedural maze escape game built with C++11, OpenGL, and FreeGLUT. The project combines deterministic maze generation, tile-based movement, time-based scoring, keyboard and mouse driven menus, and plain-text persistence in a modular desktop game codebase.
 
-## Project Overview
+> Repository status note
+> This repository includes runnable Windows executables in the root directory. It also includes source code, `build.bat`, and MSYS2/VS Code build configuration. However, a syntax-only verification of the checked-in source on April 20, 2026 found compile issues in `core/game.cpp`, so the bundled executable is currently the most reliable path for evaluation.
 
-The game runs as a five-stage campaign with per-level maze sizes ranging from `15x21` to `29x41`. Each stage generates a dense, deterministic maze with one guaranteed route from the start to the exit plus many misleading branches, dead ends, rooms, limited late-stage loops, and several deliberate 3-way or 4-way decision junctions. Score is derived from completion time, so faster clears earn higher totals.
+## Table of Contents
 
-## Gameplay Summary
+- [Quick Start](#quick-start)
+- [Introduction](#introduction)
+- [Problem Statement](#problem-statement)
+- [Objectives](#objectives)
+- [Key Features](#key-features)
+- [Demo / Screenshots](#demo--screenshots)
+- [Tech Stack](#tech-stack)
+- [Campaign Overview](#campaign-overview)
+- [Architecture / How It Works](#architecture--how-it-works)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Setup](#setup)
+- [Build Instructions](#build-instructions)
+- [Run Instructions](#run-instructions)
+- [Usage Guide](#usage-guide)
+- [Project Walkthrough](#project-walkthrough)
+- [Controls](#controls)
+- [Configuration](#configuration)
+- [Assets and Resources](#assets-and-resources)
+- [Deployment / Distribution Notes](#deployment--distribution-notes)
+- [Testing and Verification](#testing-and-verification)
+- [Limitations](#limitations)
+- [Future Improvements](#future-improvements)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [Contributors / Author](#contributors--author)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
 
-- Start from the stage entrance and move tile by tile through a procedurally generated maze.
-- Reach the exit as quickly as possible to maximize your score.
-- Explore carefully: side paths can lead to dead ends, rooms, loops, and misleading junctions.
-- Finish all five stages as quickly as possible.
+## Quick Start
 
-## Difficulty Progression
+If you want to review or play the project immediately, run the bundled executable from the repository root:
 
-Maze difficulty increases across the five stages through multiple mechanisms:
-
-1. **Grid Size**: Stages increase from 15×21 tiles to 29×41 tiles
-   - Larger grids provide more room for complex routing and dead ends
-
-2. **Path Complexity**: Later stages feature:
-   - More decision junctions (3-way and 4-way intersections)
-   - Greater path length and turn counts
-   - Increased detour routes relative to critical path
-   - More dead ends and misleading branches
-
-3. **Scoring Window**: Par times increase, but the time scoring window (2× par time) creates tighter scoring requirements for higher levels
-   - Stage 1 Par: 35s → Scoring window: 70s
-   - Stage 5 Par: 82s → Scoring window: 164s
-
-4. **Maze Generation Tuning**: See **Maze Generation Algorithm** section and `Config::SCORE_*_WEIGHT` constants in `core/config.h`
-
-## Scoring Formula
-
-Score is calculated based on completion time relative to the par time for that stage:
-
-```
-Scoring Window = Par Time × 2
-Score Base = Scoring Window - Elapsed Time
-Final Score = max(0, Score Base / 25)  // rounded down per 25ms
-```
-
-- Faster clears earn more points
-- Completing within par time earns the maximum points for that stage
-- Completing beyond 2× par time earns 0 points
-- Total campaign score is the sum of all five stage scores
-
-## Maze Generation Algorithm
-
-The maze generator creates challenging but fair mazes through a multi-step process:
-
-### Step 1: Generate Candidate Layouts
-
-- Creates 28-64 complete maze candidates (count varies by difficulty level)
-- Uses depth-first search (DFS) to carve "perfect" mazes (no loops, single solution path)
-- Each candidate is deterministically seeded so the same level always generates the same mazes
-
-### Step 2: Analyze Each Candidate
-
-For each candidate, the generator computes:
-
-- **Critical Path**: Shortest route from start to exit (BFS pathfinding)
-- **Turn Count**: Number of direction changes along the critical path
-- **Dead Ends**: Count of tile clusters that lead nowhere
-- **Junctions**: Count of 3-way or 4-way intersections
-- **Branch Depth**: Maximum depth of sub-branches from critical path
-- **Route Detour**: How much longer the actual longest path is vs. critical path
-- **Straight Runs**: Length of the longest corridor without turns
-
-### Step 3: Score and Select
-
-Each candidate receives a composite score based on these metrics, using weighted factors from `Config`:
-
-```cpp
-score = critical_path × SCORE_CRITICAL_PATH_WEIGHT (12)
-      + turns × SCORE_TURN_COUNT_WEIGHT (15)
-      + dead_ends × SCORE_DEAD_END_WEIGHT (8)
-      + ... (more factors)
-      - longest_straight × SCORE_LONGEST_STRAIGHT_RUN_WEIGHT (18)  // penalize simplicity
-      - exit_distance_bias × 2
+```powershell
+.\maze_runner.exe
 ```
 
-- Candidates meeting difficulty specifications are prioritized
-- If multiple candidates qualify, the highest-scoring one is selected
-- If no candidates meet specs, the best candidate is selected anyway
+Keep `maze_runner.exe` and `libfreeglut.dll` in the same directory. The game reads and writes `maze_settings.txt` and `maze_highscores.txt` in the working directory.
 
-### Step 4: Optional Enhancement
+## Introduction
 
-Before finalizing, the maze can be enhanced with:
+MAZE RUNNER is a small desktop game project centered on procedural maze generation. The player moves tile by tile through a five-stage campaign, trying to reach each exit as quickly as possible. Each stage uses a fixed design specification and seed, so the maze content is generated rather than hand-authored, but still follows a controlled difficulty curve.
 
-- Strategic room carving (open areas to explore)
-- Optional loops (non-trivial shortcuts)
-- Additional junctions (increased decision points)
+From an undergraduate project perspective, the repository demonstrates several core topics in a compact codebase:
 
-**Tuning**: Adjust weight constants in `core/config.h` in the `Config::SCORE_*_WEIGHT` section to modify difficulty progression.
+- modular C++ program structure
+- event-driven desktop programming with GLUT
+- procedural content generation
+- path analysis and scoring logic
+- basic persistence through text files
+- game UI flow with menus, overlays, and HUD panels
 
-## Features
+## Problem Statement
 
-- Procedural maze generation with deterministic per-level specifications
-- One guaranteed start-to-exit solution path per stage
-- Dense branch layouts with dead ends, rooms, and limited late-stage loops
-- Multiple 3-way and 4-way intersections per stage to create route uncertainty
-- Score, timer, and high-score systems
-- Hold-to-move keyboard input for both WASD and arrow keys
-- Mouse-clickable menus, overlays, and settings UI
-- Editable player name saved between sessions
-- Animated exit flag and styled HUD/overlay panels
+Static mazes are easy to memorize and do not show much algorithmic depth. This project addresses that by generating challenging but fair mazes that still guarantee a valid route from the start to the exit. The goal is to create a replayable maze game while keeping the implementation understandable, modular, and suitable for coursework review.
+
+## Objectives
+
+- Build a complete desktop maze game with a clear gameplay loop.
+- Generate mazes procedurally instead of storing fixed layouts.
+- Control difficulty through measurable maze properties such as path length, dead ends, turns, and junctions.
+- Provide a simple user interface for playing, pausing, renaming the player, and finishing the campaign.
+- Persist player settings and high scores between sessions.
+- Organize the code into focused modules that are easy to study and maintain.
+
+## Key Features
+
+- Five-stage campaign with increasing maze size and difficulty.
+- Deterministic procedural maze generation driven by stage-specific specifications.
+- Candidate-based maze selection using path, branch, turn, dead-end, and junction analysis.
+- Optional layout enhancement through rooms, loops, and added decision junctions.
+- Tile-based player movement with held-key repeat support for both WASD and arrow keys.
+- Mouse-aware menu screens and overlays alongside keyboard navigation.
+- HUD panel showing player name, stage, timer, score, grid size, par time, and best score.
+- Persistent player name settings in `maze_settings.txt`.
+- Persistent top-five campaign scores in `maze_highscores.txt`.
+- Entire visual presentation drawn procedurally in OpenGL without a dedicated asset folder.
+
+## Demo / Screenshots
+
+Use the following placeholders when adding screenshots later:
+
+| Placeholder | Intended capture |
+| --- | --- |
+| `{{SCREENSHOT_MAIN_MENU}}` | Main menu with the four primary options |
+| `{{SCREENSHOT_HOW_TO_PLAY}}` | How to Play screen |
+| `{{SCREENSHOT_SETTINGS_SCREEN}}` | Settings screen with player-name editing |
+| `{{SCREENSHOT_GAMEPLAY_STAGE_1}}` | Early-stage gameplay with HUD visible |
+| `{{SCREENSHOT_GAMEPLAY_STAGE_5}}` | Late-stage gameplay showing increased maze complexity |
+| `{{SCREENSHOT_PAUSE_MENU}}` | Pause overlay during gameplay |
+| `{{SCREENSHOT_LEVEL_CLEAR_OVERLAY}}` | Level-complete overlay after reaching an exit |
+| `{{SCREENSHOT_CAMPAIGN_VICTORY}}` | Final victory screen with high-score list |
 
 ## Tech Stack
 
-- C++11
-- OpenGL
-- FreeGLUT
+| Area | Technology |
+| --- | --- |
+| Programming language | C++11 |
+| Rendering | OpenGL |
+| Windowing and input | FreeGLUT |
+| Graphics support libraries | GLU, Windows graphics/runtime libraries |
+| Build system | Windows batch script (`build.bat`) |
+| Toolchain configuration | MSYS2 UCRT64 + MinGW-w64, VS Code workspace settings |
+| Persistence | Plain-text files |
 
-## Campaign Stages
+## Campaign Overview
 
-| Stage | Name             | Grid  | Decision Junctions | Par Time |
-| ----- | ---------------- | ----- | ------------------ | -------- |
-| 1     | Orientation Grid | 15x21 | 4                  | 35s      |
-| 2     | Archive Drift    | 17x25 | 4                  | 42s      |
-| 3     | Foundry Knots    | 19x29 | 4                  | 50s      |
-| 4     | Blackout Loop    | 25x35 | 5                  | 68s      |
-| 5     | Final Nexus      | 29x41 | 6                  | 82s      |
+The campaign data comes from `data/leveldata.cpp`.
 
-## Configuration & Tuning
+| Stage | Name | Grid | Candidate Count | Junction Target | Par Time |
+| --- | --- | --- | ---: | ---: | ---: |
+| 1 | Orientation Grid | 15 x 21 | 28 | 4 | 35 s |
+| 2 | Archive Drift | 17 x 25 | 34 | 4 | 42 s |
+| 3 | Foundry Knots | 19 x 29 | 40 | 4 | 50 s |
+| 4 | Blackout Loop | 25 x 35 | 52 | 5 | 68 s |
+| 5 | Final Nexus | 29 x 41 | 64 | 6 | 82 s |
 
-All game constants are centralized in `core/config.h`:
+## Architecture / How It Works
 
-### Visual Constants
+### Runtime flow
 
-- `FLOOR_SHADE_*`: Floor tile coloring
-- `EXIT_PULSE_*`: Exit animation parameters
-- `HUD_PANEL_*`: Sidebar panel dimensions
+```text
+main.cpp
+  -> Game
+     -> Level / Maze / Player / Timer
+     -> MazeGenerator
+     -> Renderer / TextRenderer
+     -> HUD / Menu / Overlay
+     -> HighScoreManager / SettingsManager
+```
 
-### Gameplay Constants
+### Maze generation flow
 
-- `HOLD_MOVE_INITIAL_DELAY_MS`: Keyboard repeat initial delay (170ms)
-- `HOLD_MOVE_REPEAT_INTERVAL_MS`: Keyboard repeat interval (95ms)
-- `TIME_SCORE_WINDOW_MULTIPLIER`: Par time × this = scoring window (2×)
-- `TIME_SCORE_DIVISOR_MS`: Score granularity (25ms per point)
+The maze system is implemented mainly in `gameplay/generator.cpp` and `gameplay/generator_analysis.cpp`.
 
-### Maze Generation Constants
+1. Generate multiple candidate layouts using depth-first search carving on a wall-filled grid.
+2. Build a critical path from the start position to the selected exit.
+3. Analyze each candidate using measurable properties such as path length, turns, dead ends, branch depth, detour potential, and decision junction count.
+4. Score the candidates with weights from `core/config.h`.
+5. Select the best candidate that satisfies the stage goals, or the best available candidate if none meet all thresholds.
+6. Enhance the final layout with optional rooms, loops, and extra junctions while preserving playability.
 
-- `SCORE_*_WEIGHT`: Difficulty tuning weights (see **Maze Generation Algorithm**)
-- `MIN/MAX_CANDIDATE_COUNT`: How many maze candidates to generate per level
+### Game-state flow
+
+The current UI flow visible in the source is:
+
+- Main Menu
+- How to Play
+- Settings
+- Playing
+- Paused
+- Level Cleared
+- Campaign Won
+
+The main menu starts a new five-stage run from stage 1. The current UI does not expose a separate stage-select screen.
 
 ## Project Structure
 
 ```text
-.
-|-- core/          # game controller, state, config, shared types
-|-- gameplay/      # player, maze, collision, level loading, maze generator
-|-- render/        # OpenGL drawing, colors, bitmap text
-|-- ui/            # HUD, menus, overlays
-|-- data/          # level specifications and high-score persistence
-|-- utils/         # coordinate conversion and timer utilities
-|-- main.cpp       # GLUT setup and callback registration
-|-- build.bat      # Windows build script
-|-- libfreeglut.dll
-|-- maze_highscores.txt
-`-- maze_settings.txt
+MAZE RUNNER/
+|-- core/                  # game state, config, input, settings
+|-- gameplay/              # maze, player, collision, levels, generator
+|-- render/                # OpenGL drawing and text rendering
+|-- ui/                    # menus, HUD, overlays
+|-- data/                  # level specifications and high-score storage
+|-- utils/                 # coordinates and timer utilities
+|-- .vscode/               # local editor and task configuration
+|-- build.bat              # Windows build script
+|-- main.cpp               # program entry point and GLUT callbacks
+|-- maze_runner.exe        # bundled Windows executable
+|-- libfreeglut.dll        # bundled runtime dependency
+|-- maze_settings.txt      # saved player name
+`-- maze_highscores.txt    # saved top campaign scores
 ```
 
-## Dependencies
+## Prerequisites
 
-- A C++11-compatible compiler
-- FreeGLUT headers and library
+### To run the bundled executable
+
+- Windows environment
+- `maze_runner.exe` and `libfreeglut.dll` in the same folder
+- permission to create or update text files in the working directory
+
+### To work with the source code
+
+- MSYS2 UCRT64 or another Windows C++ toolchain with `g++`
+- FreeGLUT headers and libraries
 - OpenGL and GLU system libraries
-- On Windows, the current build links against `winmm` and `gdi32`
+- A terminal that can run `build.bat`
 
-The repository also includes `libfreeglut.dll` in the root for runtime use on Windows.
+The repository's editor settings point to `C:\msys64\ucrt64\bin\g++.exe` and `C:\msys64\ucrt64\include`.
 
-## Build and Run
+## Installation
 
-The repository includes a Windows build script:
+1. Download or clone the repository.
+2. Keep the project files together in a writable directory.
+3. If you only need to evaluate the game, use the bundled executable.
+4. If you want to work on the code, install the required compiler and FreeGLUT development libraries first.
+
+## Setup
+
+The project expects its runtime files in the repository root:
+
+- `maze_runner.exe` for launching the game
+- `libfreeglut.dll` for the Windows runtime dependency
+- `maze_settings.txt` for the saved player name
+- `maze_highscores.txt` for the saved high-score table
+
+If you move the executable elsewhere, keep the runtime DLL with it and ensure the directory remains writable for settings and score persistence.
+
+## Build Instructions
+
+The intended Windows build entry point is:
 
 ```bat
 build.bat
-maze_runner.exe
 ```
 
-Debug build:
+For a debug-oriented build:
 
 ```bat
 build.bat debug
-maze_runner.exe
 ```
 
-`build.bat` first looks for `C:\msys64\ucrt64\bin\g++.exe` and falls back to `g++` from `PATH`.
+According to `build.bat`, the script first looks for:
 
-Manual compile command used by the script:
-
-```bat
-g++ -o maze_runner.exe main.cpp core/game.cpp core/gamestate.cpp gameplay/player.cpp gameplay/maze.cpp gameplay/collision.cpp gameplay/level.cpp gameplay/generator.cpp render/renderer.cpp render/text.cpp ui/hud.cpp ui/menu.cpp ui/overlay.cpp data/highscore.cpp data/leveldata.cpp utils/coords.cpp utils/timer.cpp -lfreeglut -lopengl32 -lglu32 -lwinmm -lgdi32 -std=c++11 -O2 -Wall -Wextra -Wno-unused-parameter
+```text
+C:\msys64\ucrt64\bin\g++.exe
 ```
+
+If that compiler is not found, it falls back to `g++` on `PATH`.
+
+### Important note about the current source tree
+
+The repository clearly includes source files, build tooling, and editor configuration for building from source. However, the checked-in source did not pass a syntax-only verification on April 20, 2026 because of issues in `core/game.cpp`. In the repository's current state, source builds should therefore be treated as an intended workflow that still needs cleanup, not as a guaranteed clean build path.
+
+## Run Instructions
+
+### Recommended path
+
+Run the bundled executable from the project root:
+
+```powershell
+.\maze_runner.exe
+```
+
+### If you repair and rebuild the source
+
+Run the generated executable from the root directory so the game can continue using the existing settings and high-score files.
+
+## Usage Guide
+
+1. Launch the game and choose `Start New Game` from the main menu.
+2. Move through the maze using WASD or the arrow keys.
+3. Reach the exit flag tile before the timer window runs out to maximize score.
+4. Continue through all five stages to finish the campaign.
+5. Open `Settings` from the main menu if you want to change the saved player name.
+6. Complete the full campaign to record a final score in the high-score table.
+
+## Project Walkthrough
+
+### 1. Main Menu
+
+`{{SCREENSHOT_MAIN_MENU}}`
+
+The main menu provides the current entry points visible in the codebase: Start New Game, How to Play, Settings, and Quit. It supports keyboard selection, Enter confirmation, and mouse hover/click interaction.
+
+### 2. How to Play
+
+`{{SCREENSHOT_HOW_TO_PLAY}}`
+
+This screen explains the objective, controls, and the maze design idea before play begins. It acts as the in-game instruction page for new users.
+
+### 3. Settings
+
+`{{SCREENSHOT_SETTINGS_SCREEN}}`
+
+The settings screen allows the player name to be edited and saved. That name is reused in the HUD and in the persisted high-score list.
+
+### 4. Gameplay
+
+`{{SCREENSHOT_GAMEPLAY_STAGE_1}}`
+
+During play, the left side shows the maze and the right side shows the HUD. The player moves one tile at a time, the timer runs continuously, and the stage score depends on completion speed relative to the configured par time.
+
+`{{SCREENSHOT_GAMEPLAY_STAGE_5}}`
+
+Later stages increase the grid size and maze complexity, introducing longer routes and more decision points.
+
+### 5. Pause State
+
+`{{SCREENSHOT_PAUSE_MENU}}`
+
+The pause menu can be opened during gameplay and offers resume, restart level, return to main menu, and quit actions.
+
+### 6. Level Completion
+
+`{{SCREENSHOT_LEVEL_CLEAR_OVERLAY}}`
+
+After reaching an exit, the game displays the stage-clear overlay with the recorded stage time and stage score before continuing to the next level.
+
+### 7. Campaign Completion
+
+`{{SCREENSHOT_CAMPAIGN_VICTORY}}`
+
+After the fifth stage, the game shows a victory overlay and the persisted top campaign scores.
 
 ## Controls
 
-### Gameplay
+### Gameplay controls
 
-- `W`, `A`, `S`, `D` or arrow keys: move tile by tile, including hold-to-move
-- `P`: pause
-- `Esc`: pause during gameplay
-- `M`: return to the main menu
-- `R`: restart the run during active play
+| Input | Action |
+| --- | --- |
+| `W`, `A`, `S`, `D` | Move tile by tile |
+| Arrow keys | Move tile by tile |
+| Hold movement key | Trigger repeated movement after a short delay |
+| `P` | Pause during gameplay |
+| `Esc` | Pause during gameplay |
+| `M` | Return to main menu |
+| `R` | Restart the current run while actively playing |
+| `N` or `Enter` | Continue after clearing a stage |
 
-### Menus and Overlays
+### Menu and overlay controls
 
-- Main menu: up/down arrows, `1`-`4`, `Enter`, or mouse
-- Pause menu: `P` or `Esc` resume, `R` restart current level, `M` main menu, `Q` quit
-- Level clear: `N` or `Enter` continue, or click the continue button
-- End screen: `R` replay, `M` menu, `Q` quit, or click a button
+| Context | Input | Action |
+| --- | --- | --- |
+| Main Menu | Up / Down | Change selection |
+| Main Menu | `1` to `4` | Jump to one of the menu options |
+| Main Menu | `Enter` | Confirm selection |
+| How to Play | `Enter` or `Esc` | Return to main menu |
+| Settings | `E` or `Enter` | Start editing the player name |
+| Settings | `Backspace` | Delete one character while editing |
+| Settings | `Enter` | Save edited name |
+| Settings | `Esc` | Cancel edit or go back |
+| Pause Menu | `P` or `Esc` | Resume |
+| Pause Menu | `R` | Restart current level |
+| Pause Menu | `M` | Return to main menu |
+| Pause Menu | `Q` | Quit |
+| Victory Overlay | `R` | Replay the run |
+| Victory Overlay | `M` | Return to menu |
+| Victory Overlay | `Q` | Quit |
 
-### Settings
+Mouse interaction is also implemented for the main menu, settings screen, pause menu, level-clear button, and victory overlay buttons.
 
-- `E` or `Enter`: begin editing the player name
-- Text input: type the new name
-- `Backspace`: delete while editing
-- `Enter`: save while editing
-- `Esc`: cancel editing, or go back when not editing
-- Mouse: click `Edit`, `Save`, `Cancel`, `Back`, or the name field
+## Configuration
 
-## Game Objective and Rules
+| File | Purpose |
+| --- | --- |
+| [`core/config.h`](core/config.h) | Shared gameplay, timing, rendering, and scoring constants |
+| [`data/leveldata.cpp`](data/leveldata.cpp) | Stage names, grid sizes, seeds, candidate counts, room budgets, loop budgets, and par times |
+| [`maze_settings.txt`](maze_settings.txt) | Saved player name in `NAME=<value>` format |
+| [`maze_highscores.txt`](maze_highscores.txt) | Saved top-five campaign scores in `name|score` format |
 
-- The player starts at the stage-specific entrance defined in `data/leveldata.cpp`.
-- Reaching the exit wins the stage immediately.
-- Walls block movement.
-- The generator deliberately introduces several 3-way and 4-way intersections on every stage.
-- Stage score is based on completion time relative to that stage's par time.
-- Clearing stage 5 wins the campaign.
+Key configuration areas already exposed by the source include:
 
-## Configuration Notes
+- window size and board layout metrics
+- hold-to-move delay and repeat interval
+- scoring window multiplier and divisor
+- maze-evaluation weights used during candidate scoring
+- stage-level difficulty parameters
 
-- Core game constants live in `core/config.h`.
-- Stage tuning data lives in `data/leveldata.cpp`.
-- Player name is stored in `maze_settings.txt` as `NAME=<value>`.
-- High scores are stored in `maze_highscores.txt` as `name|score`.
-- Changing compile-time constants or level definitions requires rebuilding the executable.
+Changing compile-time constants requires rebuilding the executable.
 
-## Screenshots and Assets
+## Assets and Resources
 
-This repository does not include a dedicated screenshot, texture, or audio asset folder. The maze, player, exit flag, HUD, menus, and overlays are drawn procedurally in the `render/` and `ui/` modules.
+This repository does not include a dedicated texture, sprite, audio, or screenshot asset directory. The maze floor, walls, player marker, exit marker, HUD, menus, and overlays are all drawn procedurally in the rendering and UI modules.
 
-## Known Limitations
+Bundled runtime resources include:
 
-- The included build automation is Windows-only (`build.bat`).
-- Rendering uses OpenGL immediate mode and GLUT bitmap fonts.
-- Campaign length is a compile-time constant (`5` stages), while individual stage grid sizes come from `data/leveldata.cpp`.
-- Runtime data is written to text files in the repository root.
-- `R` is state-dependent: in the pause menu it restarts the current level, while during active play and on end screens it restarts the run.
-- No audio system is implemented in the current codebase.
+- `maze_runner.exe`
+- `libfreeglut.dll`
+- sample persistence files for settings and high scores
 
-## Contribution Notes
+## Deployment / Distribution Notes
 
-There is no `CONTRIBUTING.md` in the repository. If you extend the project, keep the gameplay rules, controls, and configuration described here aligned with `core/game.cpp`, `core/config.h`, `data/leveldata.cpp`, and the UI text in `ui/`.
+This project is structured as a lightweight Windows desktop application rather than an installer-based product.
+
+For distribution, the minimum practical set is:
+
+- `maze_runner.exe`
+- `libfreeglut.dll`
+
+The save files can either be shipped with the project or created by the game at runtime, as long as the working directory is writable.
+
+The repository root also contains additional Windows executables such as `main.exe` and `maze_validator.exe`, but their roles are not clearly documented by the source or build files. This README treats `maze_runner.exe` as the primary runnable artifact.
+
+## Testing and Verification
+
+The repository does not include an automated test suite, CI pipeline, or dedicated test directory. Based on the code and included artifacts, the project appears to rely mainly on manual verification through gameplay.
+
+Current evidence available in the repository:
+
+- source modules are organized across `core/`, `gameplay/`, `render/`, `ui/`, `data/`, and `utils/`
+- a Windows build script and VS Code/MSYS2 configuration are present
+- prebuilt Windows executables are included in the root directory
+- settings and high-score persistence files are included
+
+Additional verification performed during documentation preparation:
+
+- a syntax-only compile check against the checked-in source did not pass because of errors in `core/game.cpp`
+
+## Limitations
+
+- The repository is Windows-centered in both build tooling and distributed artifacts.
+- The current checked-in source has compile inconsistencies, so source builds are not presently a fully clean path.
+- Rendering uses immediate-mode OpenGL and GLUT bitmap text rather than a modern rendering pipeline.
+- The game stores settings and scores as plain text in the working directory.
+- No separate audio system, asset pipeline, or installer is present.
+- The current UI starts a new campaign from stage 1 and does not expose a dedicated stage-select screen.
+
+## Future Improvements
+
+- Repair the current source/build inconsistencies and revalidate `build.bat`.
+- Add automated tests for maze generation, scoring, collision, and persistence.
+- Add a dedicated high-score screen and broader post-run statistics.
+- Introduce packaging that separates build artifacts from user save data.
+- Modernize the rendering path for easier optimization and future extension.
+- Add configurable difficulty or gameplay modes without modifying source files.
+
+## Troubleshooting
+
+| Issue | Likely cause | Suggested action |
+| --- | --- | --- |
+| `maze_runner.exe` does not start | Missing runtime DLL | Keep `libfreeglut.dll` beside the executable |
+| `build.bat` cannot find the compiler | MSYS2 or `g++` is not installed or not on `PATH` | Install the expected toolchain or expose `g++` on `PATH` |
+| Source build fails immediately | Current source tree has compile issues | Use the bundled executable for evaluation, or fix the source before rebuilding |
+| Name or score changes are not saved | Working directory is not writable | Run the game from a writable directory |
+| Display or rendering problems occur | Graphics/OpenGL support issue | Try a machine with working OpenGL support and updated graphics drivers |
+
+## FAQ
+
+### Does the game generate a new maze every run?
+
+The mazes are procedurally generated, but the stage definitions include fixed seeds and generation rules. That means the layouts are generated algorithmically while still following a deterministic stage setup.
+
+### When is the score saved?
+
+The current code saves high scores when the full five-stage campaign is completed, not after each individual stage.
+
+### Where are player names and scores stored?
+
+The player name is stored in `maze_settings.txt`, and the top campaign scores are stored in `maze_highscores.txt`.
+
+### Does the project depend on external art or audio assets?
+
+No. The visuals are generated procedurally in code, and no audio system is implemented in the current repository.
+
+## Contributors / Author
+
+Explicit authorship information is not included in the current repository metadata. Before final academic submission, this section should be updated with:
+
+- student name(s)
+- student ID(s)
+- course and section
+- institution
+- submission date
 
 ## License
 
 No license file is present in this repository.
+
+## Acknowledgements
+
+- OpenGL for the rendering foundation
+- FreeGLUT for the windowing, input, and event loop support
+- MSYS2 / MinGW-w64 for the Windows-oriented development toolchain reflected in the project configuration
