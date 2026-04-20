@@ -17,16 +17,7 @@ enum GameState
     STATE_PAUSED,
     STATE_LEVEL_CLEARED,
     STATE_CAMPAIGN_WON,
-    STATE_GAME_OVER,
     STATE_SETTINGS
-};
-
-// Title screen flow steps
-enum TitleStep
-{
-    TITLE_STEP_WELCOME,
-    TITLE_STEP_NAME,
-    TITLE_STEP_DIFFICULTY
 };
 
 // Grid position

@@ -4,11 +4,9 @@
 
 GameStateData::GameStateData()
     : state(STATE_MAIN_MENU),
-      titleStep(TITLE_STEP_WELCOME),
       currentLevelIndex(0),
       selectedStartLevelIndex(0),
       menuSelection(0),
-      lives(Config::MAX_LIVES),
       score(0),
       lastLevelScore(0),
       lastLevelTimeMs(0),
@@ -24,11 +22,9 @@ GameStateData::GameStateData()
 void GameStateData::reset()
 {
     state = STATE_MAIN_MENU;
-    titleStep = TITLE_STEP_WELCOME;
     currentLevelIndex = 0;
     selectedStartLevelIndex = 0;
     menuSelection = 0;
-    lives = Config::MAX_LIVES;
     score = 0;
     lastLevelScore = 0;
     lastLevelTimeMs = 0;

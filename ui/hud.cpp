@@ -82,7 +82,7 @@ namespace HUD
                     halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Timer", timerText, 0.96f, 0.82f, 0.44f);
         drawInfoCard(innerX, top - Config::HUD_CARD_SCORE_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
                     "Score", scoreText, 0.70f, 0.95f, 0.74f);
-        drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_LIVES_OFFSET,
+        drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_SCORE_OFFSET,
                     halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Grid", gridText, 1.0f, 0.78f, 0.72f);
         drawInfoCard(innerX, top - Config::HUD_CARD_PAR_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
                     "Par", parText, 1.0f, 0.84f, 0.0f);

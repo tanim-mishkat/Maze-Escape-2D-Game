@@ -52,7 +52,6 @@ namespace Config
 
     // Game settings
     constexpr int TOTAL_LEVELS = 5;
-    constexpr int MAX_LIVES = 3;
     constexpr int MAX_HIGH_SCORES = 5;
     constexpr int MAX_PLAYER_NAME_LENGTH = 18;
     constexpr char HIGH_SCORE_FILE[] = "maze_highscores.txt";
@@ -73,7 +72,6 @@ namespace Config
     constexpr float HUD_CARD_PLAYER_OFFSET = 140.0f;
     constexpr float HUD_CARD_STAGE_OFFSET = 224.0f;
     constexpr float HUD_CARD_SCORE_OFFSET = 302.0f;
-    constexpr float HUD_CARD_LIVES_OFFSET = 302.0f;
     constexpr float HUD_CARD_PAR_OFFSET = 380.0f;
     constexpr float HUD_CARD_BEST_OFFSET = 380.0f;
     constexpr float HUD_CARD_HEIGHT_TALL = 72.0f;

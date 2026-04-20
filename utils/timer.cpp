@@ -2,7 +2,8 @@
 #include <GL/freeglut.h>
 
 Timer::Timer()
-    : startTimeMs(0), elapsedTimeMs(0), animationTime(0.0f), running(false)
+    : startTimeMs(0), elapsedTimeMs(0), animationTime(0.0f), running(false),
+      animationPauseOffset(0), lastPauseStartMs(0)
 {
 }
 
@@ -16,7 +17,9 @@ void Timer::stop()
 {
     if (running)
     {
-        elapsedTimeMs = glutGet(GLUT_ELAPSED_TIME) - startTimeMs;
+        int now = glutGet(GLUT_ELAPSED_TIME);
+        elapsedTimeMs = now - startTimeMs;
+        lastPauseStartMs = now;
         running = false;
     }
 }
@@ -26,13 +29,17 @@ void Timer::reset()
     startTimeMs = 0;
     elapsedTimeMs = 0;
     running = false;
+    animationPauseOffset = 0;
+    lastPauseStartMs = 0;
 }
 
 void Timer::resume()
 {
     if (!running && elapsedTimeMs > 0)
     {
-        startTimeMs = glutGet(GLUT_ELAPSED_TIME) - elapsedTimeMs;
+        int now = glutGet(GLUT_ELAPSED_TIME);
+        animationPauseOffset += now - lastPauseStartMs;
+        startTimeMs = now - elapsedTimeMs;
         running = true;
     }
 }
@@ -58,5 +65,5 @@ float Timer::getAnimationTime() const
 
 void Timer::updateAnimationTime()
 {
-    animationTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    animationTime = (glutGet(GLUT_ELAPSED_TIME) - animationPauseOffset) / 1000.0f;
 }

@@ -154,13 +154,6 @@ void Game::render(int windowWidth, int windowHeight)
                                "You completed all levels!",
                                gameState, highScores);
     }
-    else if (gameState.state == STATE_GAME_OVER)
-    {
-        Overlay::drawEndOverlay(windowWidth, windowHeight,
-                               "Game Over",
-                               "You ran out of lives",
-                               gameState, highScores);
-    }
 }
 
 void Game::startNewRun(int levelIndex)
@@ -169,7 +162,6 @@ void Game::startNewRun(int levelIndex)
     gameState.selectedStartLevelIndex = levelIndex;
     gameState.menuSelection = levelIndex;
     gameState.score = 0;
-    gameState.lives = Config::MAX_LIVES;
     gameState.lastLevelScore = 0;
     gameState.lastLevelTimeMs = 0;
     gameState.scoreSaved = false;
@@ -209,7 +201,6 @@ void Game::returnToMainMenu()
     gameState.lastLevelTimeMs = 0;
     gameState.settingsEditingName = false;
     syncPlayerNameToSettingsDraft();
-    gameState.titleStep = TITLE_STEP_WELCOME;
     gameState.menuSelection = 0;
     gameState.state = STATE_MAIN_MENU;
 }
@@ -686,8 +677,7 @@ void Game::handleKeyDown(unsigned char key)
     
     if (key == 'r' || key == 'R')
     {
-        if (gameState.state == STATE_PLAYING || gameState.state == STATE_GAME_OVER
-            || gameState.state == STATE_CAMPAIGN_WON)
+        if (gameState.state == STATE_PLAYING || gameState.state == STATE_CAMPAIGN_WON)
         {
             startNewRun(gameState.selectedStartLevelIndex);
         }
@@ -696,7 +686,7 @@ void Game::handleKeyDown(unsigned char key)
 
     if (key == 'q' || key == 'Q')
     {
-        if (gameState.state == STATE_GAME_OVER || gameState.state == STATE_CAMPAIGN_WON)
+        if (gameState.state == STATE_CAMPAIGN_WON)
         {
             glutLeaveMainLoop();
         }
@@ -952,7 +942,7 @@ void Game::handleMouseClick(int x, int y)
         if (Overlay::isLevelClearContinueHit(cachedWinW, cachedWinH, x, y))
             startLevel(gameState.currentLevelIndex + 1);
     }
-    else if (gameState.state == STATE_CAMPAIGN_WON || gameState.state == STATE_GAME_OVER)
+    else if (gameState.state == STATE_CAMPAIGN_WON)
     {
         Overlay::EndOverlayAction action = Overlay::hitTestEndOverlay(cachedWinW, cachedWinH, x, y);
 

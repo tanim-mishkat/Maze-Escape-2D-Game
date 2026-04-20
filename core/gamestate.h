@@ -8,11 +8,9 @@
 struct GameStateData
 {
     GameState state;
-    TitleStep titleStep;
     int currentLevelIndex;
     int selectedStartLevelIndex;
     int menuSelection;
-    int lives;
     int score;
     int lastLevelScore;
     int lastLevelTimeMs;
