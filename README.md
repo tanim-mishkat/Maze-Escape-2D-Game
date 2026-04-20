@@ -1,122 +1,156 @@
-# Maze Runner - Refactored Architecture
+# Maze Runner
 
-A 2D tile-based maze game built with C++ and OpenGL/FreeGLUT.
+Maze Runner is a 2D maze escape game built with C++, OpenGL, and FreeGLUT. The project uses procedurally generated tile mazes, a sidebar HUD, keyboard and mouse driven menus, and plain-text persistence for settings and high scores.
+
+## Project Overview
+
+The game runs as a five-stage campaign on a fixed 12x16 grid. Each stage generates a maze with a single valid route from the start to the locked exit. The player must find the key placed along that route, avoid traps and blocking obstacles on misleading branches, and finish quickly to maximize score.
+
+## Gameplay Summary
+
+- Start from the fixed spawn point and move one tile at a time.
+- Find the key before attempting to leave through the exit.
+- Explore carefully: side paths can lead to dead ends, traps, or blocked routes.
+- Finish all five stages before running out of lives.
+
+## Features
+
+- Procedural maze generation with deterministic per-level specifications
+- One guaranteed start-to-exit solution path per stage
+- Dead ends, traps, and obstacles placed to increase navigation difficulty
+- Key-and-locked-exit objective on every stage
+- Score, timer, life, and high-score systems
+- Mouse-clickable menus, overlays, and settings UI
+- Editable player name saved between sessions
+- Animated exit flag, traps, key, and styled HUD/overlay panels
+
+## Tech Stack
+
+- C++11
+- OpenGL
+- FreeGLUT
+
+## Campaign Stages
+
+| Stage | Name | Traps | Obstacles | Par Time |
+|-------|------|-------|-----------|----------|
+| 1 | Orientation Grid | 3 | 1 | 30s |
+| 2 | Archive Drift | 4 | 2 | 28s |
+| 3 | Foundry Knots | 5 | 2 | 26s |
+| 4 | Blackout Loop | 6 | 3 | 24s |
+| 5 | Final Nexus | 7 | 3 | 22s |
 
 ## Project Structure
 
-```
-maze-runner/
-├── main.cpp                    # Entry point, GLUT setup
-├── core/                       # Core game systems
-│   ├── config.h               # All game constants
-│   ├── types.h                # Enums and basic structs
-│   ├── gamestate.h/cpp        # Game state container
-│   ├── game.h/cpp             # Main game controller
-├── gameplay/                   # Gameplay mechanics
-│   ├── player.h/cpp           # Player entity
-│   ├── maze.h/cpp             # Maze grid management
-│   ├── collision.h/cpp        # Collision detection
-│   ├── level.h/cpp            # Level loading
-├── render/                     # Rendering systems
-│   ├── colors.h               # Color constants
-│   ├── renderer.h/cpp         # OpenGL drawing primitives
-│   ├── text.h/cpp             # Text rendering
-├── ui/                         # User interface
-│   ├── hud.h/cpp              # In-game HUD
-│   ├── menu.h/cpp             # Title screen
-│   ├── overlay.h/cpp          # Level clear/game over screens
-├── data/                       # Data management
-│   ├── highscore.h/cpp        # High score persistence
-│   ├── leveldata.h/cpp        # Maze definitions
-└── utils/                      # Utilities
-    ├── coords.h/cpp           # Coordinate conversions
-    └── timer.h/cpp            # Time tracking
-
+```text
+.
+|-- core/          # game controller, state, config, shared types
+|-- gameplay/      # player, maze, collision, level loading, maze generator
+|-- render/        # OpenGL drawing, colors, bitmap text
+|-- ui/            # HUD, menus, overlays
+|-- data/          # level specifications and high-score persistence
+|-- utils/         # coordinate conversion and timer utilities
+|-- main.cpp       # GLUT setup and callback registration
+|-- build.bat      # Windows build script
+|-- libfreeglut.dll
+|-- maze_highscores.txt
+`-- maze_settings.txt
 ```
 
-## Module Descriptions
+## Dependencies
 
-### Core
-- **config.h**: Centralized constants (grid size, player size, game settings)
-- **types.h**: Enums (GameState, TileType) and basic structs (GridPos, ScreenPos)
-- **gamestate.h/cpp**: Container for all mutable game state
-- **game.h/cpp**: Main game controller, orchestrates all systems
+- A C++11-compatible compiler
+- FreeGLUT headers and library
+- OpenGL and GLU system libraries
+- On Windows, the current build links against `winmm` and `gdi32`
 
-### Gameplay
-- **player.h/cpp**: Player position, movement flags, grid/screen conversion
-- **maze.h/cpp**: Grid storage, tile queries, protected path marking
-- **collision.h/cpp**: Movement validation, trap/exit detection
-- **level.h/cpp**: Level loading, random tile placement
+The repository also includes `libfreeglut.dll` in the root for runtime use on Windows.
 
-### Render
-- **colors.h**: Named color constants for consistent theming
-- **renderer.h/cpp**: OpenGL primitives (rects, outlines) and game element rendering
-- **text.h/cpp**: GLUT bitmap text with shadow effects
+## Build and Run
 
-### UI
-- **hud.h/cpp**: In-game sidebar with stats and controls
-- **menu.h/cpp**: Three-step title screen (welcome, name, difficulty)
-- **overlay.h/cpp**: Level clear and game over overlays
+The repository includes a Windows build script:
 
-### Data
-- **highscore.h/cpp**: File-based high score persistence
-- **leveldata.h/cpp**: Static maze definitions and winning paths
-
-### Utils
-- **coords.h/cpp**: Grid ↔ screen coordinate conversions
-- **timer.h/cpp**: Game timer and animation time tracking
-
-## Build Instructions
-
-### Windows (MinGW)
-```bash
+```bat
 build.bat
+maze_runner.exe
 ```
 
-### Manual Build
-```bash
-g++ -o maze_runner.exe main.cpp core/*.cpp gameplay/*.cpp render/*.cpp ui/*.cpp data/*.cpp utils/*.cpp -lfreeglut -lopengl32 -lglu32 -lwinmm -lgdi32 -std=c++11 -O2
+Debug build:
+
+```bat
+build.bat debug
+maze_runner.exe
 ```
 
-## Design Principles
+`build.bat` first looks for `C:\msys64\ucrt64\bin\g++.exe` and falls back to `g++` from `PATH`.
 
-1. **Separation of Concerns**: Rendering, logic, input, and data are isolated
-2. **No Deep Inheritance**: Simple structs and classes
-3. **Value Types**: GridPos, ScreenPos are lightweight value types
-4. **Explicit Grid Logic**: Coordinate conversions are centralized
-5. **Minimal Globals**: Only the game instance in main.cpp
-6. **Beginner-Readable**: Clear naming, no template metaprogramming
+Manual compile command used by the script:
 
-## Performance Characteristics
-
-- **Grid Lookup**: O(1) array access
-- **Collision**: O(1) tile check
-- **Rendering**: O(tiles) = O(192) per frame
-- **Movement**: O(1) tile-based, no physics
-- **Memory**: ~50KB static data, minimal heap usage
-
-## Gameplay Features
-
-- Three difficulty levels (Easy, Medium, Hard)
-- Tile-based movement (WASD or arrow keys)
-- Protected winning path (obstacles never block solution)
-- Trap system (costs score and lives)
-- Timer-based scoring with bonuses
-- High score persistence with player names
-- Three-step title screen flow
+```bat
+g++ -o maze_runner.exe main.cpp core/game.cpp core/gamestate.cpp gameplay/player.cpp gameplay/maze.cpp gameplay/collision.cpp gameplay/level.cpp gameplay/generator.cpp render/renderer.cpp render/text.cpp ui/hud.cpp ui/menu.cpp ui/overlay.cpp data/highscore.cpp data/leveldata.cpp utils/coords.cpp utils/timer.cpp -lfreeglut -lopengl32 -lglu32 -lwinmm -lgdi32 -std=c++11 -O2 -Wall -Wextra -Wno-unused-parameter
+```
 
 ## Controls
 
-- **WASD / Arrow Keys**: Move one tile
-- **R**: Restart current run
-- **T**: Return to title screen
-- **N / Enter**: Next level (after clearing)
-- **ESC**: Quit
+### Gameplay
 
-## Future Extension Points
+- `W`, `A`, `S`, `D` or arrow keys: move one tile
+- `P`: pause
+- `Esc`: pause during gameplay
+- `M`: return to the main menu
+- `R`: restart the run during active play
 
-- Add new tile types in `types.h` (TileType enum)
-- Add new levels in `data/leveldata.cpp`
-- Implement smooth movement in `player.cpp`
-- Add sound effects in `game.cpp` event handlers
-- Replace immediate mode OpenGL in `renderer.cpp` with VBOs
+### Menus and Overlays
+
+- Main menu: up/down arrows, `1`-`4`, `Enter`, or mouse
+- Pause menu: `P` or `Esc` resume, `R` restart current level, `M` main menu, `Q` quit
+- Level clear: `N` or `Enter` continue, or click the continue button
+- End screen: `R` replay, `M` menu, `Q` quit, or click a button
+
+### Settings
+
+- `E` or `Enter`: begin editing the player name
+- Text input: type the new name
+- `Backspace`: delete while editing
+- `Enter`: save while editing
+- `Esc`: cancel editing, or go back when not editing
+- Mouse: click `Edit`, `Save`, `Cancel`, `Back`, or the name field
+
+## Game Objective and Rules
+
+- The player starts at row `9`, column `1`.
+- Every stage requires collecting the key before the locked exit can be used.
+- Walls and brown obstacles block movement.
+- Red traps deduct `1` life and `125` points, then respawn the player at the start.
+- Picking up a key awards `200` points.
+- Clearing a stage awards a level bonus based on stage data, clear time, and remaining lives.
+- Losing all lives ends the run. Clearing stage 5 wins the campaign.
+
+## Configuration Notes
+
+- Core game constants live in `core/config.h`.
+- Stage tuning data lives in `data/leveldata.cpp`.
+- Player name is stored in `maze_settings.txt` as `NAME=<value>`.
+- High scores are stored in `maze_highscores.txt` as `name|score`.
+- Changing compile-time constants or level definitions requires rebuilding the executable.
+
+## Screenshots and Assets
+
+This repository does not include a dedicated screenshot, texture, or audio asset folder. The maze, player, traps, key, exit flag, HUD, menus, and overlays are drawn procedurally in the `render/` and `ui/` modules.
+
+## Known Limitations
+
+- The included build automation is Windows-only (`build.bat`).
+- Rendering uses OpenGL immediate mode and GLUT bitmap fonts.
+- Grid size and campaign length are compile-time constants (`12x16`, `5` stages).
+- Runtime data is written to text files in the repository root.
+- `R` is state-dependent: in the pause menu it restarts the current level, while during active play and on end screens it restarts the run.
+- No audio system is implemented in the current codebase.
+
+## Contribution Notes
+
+There is no `CONTRIBUTING.md` in the repository. If you extend the project, keep the gameplay rules, controls, and configuration described here aligned with `core/game.cpp`, `core/config.h`, `data/leveldata.cpp`, and the UI text in `ui/`.
+
+## License
+
+No license file is present in this repository.
