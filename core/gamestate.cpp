@@ -13,11 +13,12 @@ GameStateData::GameStateData()
       levelClearBonus(0),
       scoreSaved(false),
       hasKey(false),
-      soundEnabled(true),
+      settingsEditingName(false),
       mouseX(0),
       mouseY(0)
 {
     std::snprintf(playerName, sizeof(playerName), "PLAYER");
+    std::snprintf(settingsDraftName, sizeof(settingsDraftName), "%s", playerName);
 }
 
 void GameStateData::reset()
@@ -32,6 +33,8 @@ void GameStateData::reset()
     levelClearBonus = 0;
     scoreSaved = false;
     hasKey = false;
+    settingsEditingName = false;
+    std::snprintf(settingsDraftName, sizeof(settingsDraftName), "%s", playerName);
 }
 
 bool GameStateData::isPlaying() const

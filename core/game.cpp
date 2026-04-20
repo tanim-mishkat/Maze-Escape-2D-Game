@@ -11,15 +11,6 @@
 #include <cstdio>
 #include <ctime>
 
-namespace
-{
-    bool inRect(int px, int py, float rx, float ry, float rw, float rh)
-    {
-        return px >= static_cast<int>(rx) && px <= static_cast<int>(rx + rw)
-            && py >= static_cast<int>(ry) && py <= static_cast<int>(ry + rh);
-    }
-}
-
 Game::Game() : cachedWinW(1180), cachedWinH(720)
 {
 }
@@ -36,7 +27,6 @@ void Game::saveSettings()
 {
     FILE* f = std::fopen(Config::SETTINGS_FILE, "w");
     if (!f) return;
-    std::fprintf(f, "SOUND=%d\n", gameState.soundEnabled ? 1 : 0);
     std::fprintf(f, "NAME=%s\n", gameState.playerName);
     std::fclose(f);
 }
@@ -44,7 +34,12 @@ void Game::saveSettings()
 void Game::loadSettings()
 {
     FILE* f = std::fopen(Config::SETTINGS_FILE, "r");
-    if (!f) return;
+    if (!f)
+    {
+        ensurePlayerName();
+        syncPlayerNameToSettingsDraft();
+        return;
+    }
     char line[64];
     while (std::fgets(line, sizeof(line), f))
     {
@@ -54,12 +49,12 @@ void Game::loadSettings()
         char* cr = std::strchr(line, '\r');
         if (cr) *cr = '\0';
 
-        if (std::strncmp(line, "SOUND=", 6) == 0)
-            gameState.soundEnabled = (line[6] == '1');
-        else if (std::strncmp(line, "NAME=", 5) == 0 && line[5] != '\0')
+        if (std::strncmp(line, "NAME=", 5) == 0 && line[5] != '\0')
             std::snprintf(gameState.playerName, sizeof(gameState.playerName), "%s", line + 5);
     }
     std::fclose(f);
+    ensurePlayerName();
+    syncPlayerNameToSettingsDraft();
 }
 
 void Game::update()
@@ -83,7 +78,7 @@ void Game::render(int windowWidth, int windowHeight)
 
     if (gameState.state == STATE_HOW_TO_PLAY)
     {
-        Menu::drawHowToPlay(windowWidth, windowHeight);
+        Menu::drawHowToPlay(windowWidth, windowHeight, gameState);
         return;
     }
 
@@ -137,7 +132,7 @@ void Game::render(int windowWidth, int windowHeight)
     // Draw overlays
     if (gameState.state == STATE_PAUSED)
     {
-        Menu::drawPauseMenu(windowWidth, windowHeight);
+        Menu::drawPauseMenu(windowWidth, windowHeight, gameState);
     }
     else if (gameState.state == STATE_LEVEL_CLEARED)
     {
@@ -173,18 +168,15 @@ void Game::startNewRun(int levelIndex)
 
 void Game::startLevel(int levelIndex)
 {
-    // Bounds check
     if (levelIndex < 0 || levelIndex >= Config::TOTAL_LEVELS)
     {
         levelIndex = 0;
     }
-    
+
     gameState.currentLevelIndex = levelIndex;
     gameState.hasKey = false;
-    
-    // Use procedural generation for all levels
-    level.loadProcedural(levelIndex);
 
+    level.load(levelIndex);
     gameState.levelClearBonus = 0;
     timer.reset();
     timer.start();
@@ -192,11 +184,20 @@ void Game::startLevel(int levelIndex)
     gameState.state = STATE_PLAYING;
 }
 
+void Game::openSettings()
+{
+    syncPlayerNameToSettingsDraft();
+    gameState.settingsEditingName = false;
+    gameState.state = STATE_SETTINGS;
+}
+
 void Game::returnToMainMenu()
 {
     player.resetMovementFlags();
     timer.reset();
     gameState.levelClearBonus = 0;
+    gameState.settingsEditingName = false;
+    syncPlayerNameToSettingsDraft();
     gameState.titleStep = TITLE_STEP_WELCOME;
     gameState.menuSelection = 0;
     gameState.state = STATE_MAIN_MENU;
@@ -291,16 +292,16 @@ void Game::handleTrapHit()
 
 void Game::handleExitReached()
 {
-    int timeBonus = 1200 - timer.getElapsedMs() / 50;
-    int lifeBonus = gameState.lives * 150;
+    const LevelDefinition& definition = level.getDefinition();
+    int timeBonus = definition.parTimeMs - timer.getElapsedMs();
+    int lifeBonus = gameState.lives * 175;
 
     if (timeBonus < 0)
     {
         timeBonus = 0;
     }
 
-    int baseLevelBonus = 1000 + gameState.currentLevelIndex * 500;
-    gameState.levelClearBonus = baseLevelBonus + timeBonus + lifeBonus;
+    gameState.levelClearBonus = definition.clearBonus + (timeBonus / 25) + lifeBonus;
     gameState.score += gameState.levelClearBonus;
     player.resetMovementFlags();
 
@@ -327,9 +328,40 @@ void Game::finalizeSessionIfNeeded()
     gameState.scoreSaved = true;
 }
 
+void Game::syncSettingsDraftToPlayerName()
+{
+    std::snprintf(gameState.playerName, sizeof(gameState.playerName), "%s", gameState.settingsDraftName);
+}
+
+void Game::syncPlayerNameToSettingsDraft()
+{
+    std::snprintf(gameState.settingsDraftName, sizeof(gameState.settingsDraftName), "%s", gameState.playerName);
+}
+
+void Game::beginNameEdit()
+{
+    syncPlayerNameToSettingsDraft();
+    gameState.settingsEditingName = true;
+}
+
+void Game::saveNameEdit()
+{
+    syncSettingsDraftToPlayerName();
+    ensurePlayerName();
+    syncPlayerNameToSettingsDraft();
+    saveSettings();
+    gameState.settingsEditingName = false;
+}
+
+void Game::cancelNameEdit()
+{
+    syncPlayerNameToSettingsDraft();
+    gameState.settingsEditingName = false;
+}
+
 void Game::appendPlayerNameCharacter(unsigned char key)
 {
-    std::size_t length = std::strlen(gameState.playerName);
+    std::size_t length = std::strlen(gameState.settingsDraftName);
 
     if (key < 32 || key > 126 || key == '|' || length >= Config::MAX_PLAYER_NAME_LENGTH)
     {
@@ -341,17 +373,17 @@ void Game::appendPlayerNameCharacter(unsigned char key)
         return;
     }
 
-    gameState.playerName[length] = static_cast<char>(key);
-    gameState.playerName[length + 1] = '\0';
+    gameState.settingsDraftName[length] = static_cast<char>(key);
+    gameState.settingsDraftName[length + 1] = '\0';
 }
 
 void Game::removeLastPlayerNameCharacter()
 {
-    std::size_t length = std::strlen(gameState.playerName);
+    std::size_t length = std::strlen(gameState.settingsDraftName);
 
     if (length > 0)
     {
-        gameState.playerName[length - 1] = '\0';
+        gameState.settingsDraftName[length - 1] = '\0';
     }
 }
 
@@ -377,9 +409,21 @@ void Game::handleKeyDown(unsigned char key)
             resumeGame();
             return;
         }
-        else if (gameState.state == STATE_HOW_TO_PLAY || gameState.state == STATE_SETTINGS)
+        else if (gameState.state == STATE_HOW_TO_PLAY)
         {
             returnToMainMenu();
+            return;
+        }
+        else if (gameState.state == STATE_SETTINGS)
+        {
+            if (gameState.settingsEditingName)
+            {
+                cancelNameEdit();
+            }
+            else
+            {
+                returnToMainMenu();
+            }
             return;
         }
         else if (gameState.state == STATE_MAIN_MENU)
@@ -420,7 +464,7 @@ void Game::handleKeyDown(unsigned char key)
             }
             else if (gameState.menuSelection == 2)
             {
-                gameState.state = STATE_SETTINGS;
+                openSettings();
             }
             else if (gameState.menuSelection == 3)
             {
@@ -442,20 +486,23 @@ void Game::handleKeyDown(unsigned char key)
 
     if (gameState.state == STATE_SETTINGS)
     {
-        if (key == Config::KEY_ENTER)
+        if (!gameState.settingsEditingName && (key == 'e' || key == 'E'))
         {
-            saveSettings();
-            returnToMainMenu();
+            beginNameEdit();
         }
-        else if (key == 's' || key == 'S')
+        else if (!gameState.settingsEditingName && key == Config::KEY_ENTER)
         {
-            gameState.soundEnabled = !gameState.soundEnabled;
+            beginNameEdit();
         }
-        else if (key == Config::KEY_BACKSPACE)
+        else if (gameState.settingsEditingName && key == Config::KEY_ENTER)
+        {
+            saveNameEdit();
+        }
+        else if (gameState.settingsEditingName && key == Config::KEY_BACKSPACE)
         {
             removeLastPlayerNameCharacter();
         }
-        else
+        else if (gameState.settingsEditingName)
         {
             appendPlayerNameCharacter(key);
         }
@@ -649,72 +696,95 @@ void Game::handleMouseClick(int x, int y)
 
     if (gameState.state == STATE_MAIN_MENU)
     {
-        float panelW = 600.0f, panelH = 500.0f;
-        float panelX = (cachedWinW - panelW) / 2.0f;
-        float panelY = (cachedWinH - panelH) / 2.0f;
-        float optX = panelX + 40.0f;
-        float optW = panelW - 80.0f;
-        float optY = panelY + panelH - 160.0f;
+        Menu::MainMenuAction action = Menu::hitTestMainMenu(cachedWinW, cachedWinH, x, y);
 
-        for (int i = 0; i < 4; i++)
+        if (action != Menu::MAIN_MENU_ACTION_NONE)
         {
-            float oy = optY - i * 50.0f;
-            if (inRect(x, y, optX, oy, optW, 40.0f))
+            gameState.menuSelection = static_cast<int>(action);
+
+            if (action == Menu::MAIN_MENU_ACTION_START)
             {
-                gameState.menuSelection = i;
-                if (i == 0)      startNewRun(0);
-                else if (i == 1) gameState.state = STATE_HOW_TO_PLAY;
-                else if (i == 2) gameState.state = STATE_SETTINGS;
-                else             glutLeaveMainLoop();
-                return;
+                startNewRun(0);
             }
+            else if (action == Menu::MAIN_MENU_ACTION_HOW_TO_PLAY)
+            {
+                gameState.state = STATE_HOW_TO_PLAY;
+            }
+            else if (action == Menu::MAIN_MENU_ACTION_SETTINGS)
+            {
+                openSettings();
+            }
+            else if (action == Menu::MAIN_MENU_ACTION_QUIT)
+            {
+                glutLeaveMainLoop();
+            }
+
+            return;
+        }
+    }
+    else if (gameState.state == STATE_HOW_TO_PLAY)
+    {
+        if (Menu::isHowToPlayBackHit(cachedWinW, cachedWinH, x, y))
+        {
+            returnToMainMenu();
         }
     }
     else if (gameState.state == STATE_SETTINGS)
     {
-        float panelW = 560.0f, panelH = 360.0f;
-        float panelX = (cachedWinW - panelW) / 2.0f;
-        float panelY = (cachedWinH - panelH) / 2.0f;
-        float optY = panelY + panelH - 120.0f;
+        Menu::SettingsAction action = Menu::hitTestSettings(cachedWinW, cachedWinH, gameState, x, y);
 
-        // Sound toggle row
-        if (inRect(x, y, panelX + 40.0f, optY - 20.0f, panelW - 80.0f, 60.0f))
-            gameState.soundEnabled = !gameState.soundEnabled;
+        if (action == Menu::SETTINGS_ACTION_EDIT)
+        {
+            beginNameEdit();
+        }
+        else if (action == Menu::SETTINGS_ACTION_SAVE)
+        {
+            saveNameEdit();
+        }
+        else if (action == Menu::SETTINGS_ACTION_CANCEL)
+        {
+            cancelNameEdit();
+        }
+        else if (action == Menu::SETTINGS_ACTION_BACK)
+        {
+            returnToMainMenu();
+        }
     }
     else if (gameState.state == STATE_PAUSED)
     {
-        float panelW = 400.0f, panelH = 320.0f;
-        float panelX = (cachedWinW - panelW) / 2.0f;
-        float panelY = (cachedWinH - panelH) / 2.0f;
-        float btnX = panelX + 40.0f, btnW = panelW - 80.0f;
-        float baseY = panelY + panelH - 120.0f;
+        Menu::PauseMenuAction action = Menu::hitTestPauseMenu(cachedWinW, cachedWinH, x, y);
 
-        if      (inRect(x, y, btnX, baseY,        btnW, 34.0f)) resumeGame();
-        else if (inRect(x, y, btnX, baseY - 44.0f, btnW, 34.0f)) startLevel(gameState.currentLevelIndex);
-        else if (inRect(x, y, btnX, baseY - 88.0f, btnW, 34.0f)) returnToMainMenu();
-        else if (inRect(x, y, btnX, baseY - 132.0f, btnW, 34.0f)) glutLeaveMainLoop();
+        if (action == Menu::PAUSE_MENU_ACTION_RESUME)
+        {
+            resumeGame();
+        }
+        else if (action == Menu::PAUSE_MENU_ACTION_RESTART)
+        {
+            startLevel(gameState.currentLevelIndex);
+        }
+        else if (action == Menu::PAUSE_MENU_ACTION_MENU)
+        {
+            returnToMainMenu();
+        }
+        else if (action == Menu::PAUSE_MENU_ACTION_QUIT)
+        {
+            glutLeaveMainLoop();
+        }
     }
     else if (gameState.state == STATE_LEVEL_CLEARED)
     {
-        float panelW = 420.0f, panelH = 160.0f;
-        float panelX = (cachedWinW - panelW) / 2.0f;
-        float panelY = (cachedWinH - panelH) / 2.0f;
-        // Click anywhere on the overlay → next level
-        if (inRect(x, y, panelX, panelY, panelW, panelH))
+        if (Overlay::isLevelClearContinueHit(cachedWinW, cachedWinH, x, y))
             startLevel(gameState.currentLevelIndex + 1);
     }
     else if (gameState.state == STATE_CAMPAIGN_WON || gameState.state == STATE_GAME_OVER)
     {
-        float panelW = 460.0f, panelH = 340.0f;
-        float panelX = (cachedWinW - panelW) / 2.0f;
-        float panelY = (cachedWinH - panelH) / 2.0f;
-        float btnY = panelY + 14.0f, btnH = 30.0f;
+        Overlay::EndOverlayAction action = Overlay::hitTestEndOverlay(cachedWinW, cachedWinH, x, y);
 
-        // Replay button (left)
-        if (inRect(x, y, panelX + 30.0f, btnY, 160.0f, btnH))
+        if (action == Overlay::END_OVERLAY_ACTION_REPLAY)
             startNewRun(gameState.selectedStartLevelIndex);
-        // Menu button (right)
-        else if (inRect(x, y, panelX + 210.0f, btnY, 160.0f, btnH))
+        else if (action == Overlay::END_OVERLAY_ACTION_MENU)
             returnToMainMenu();
+        else if (action == Overlay::END_OVERLAY_ACTION_QUIT)
+            glutLeaveMainLoop();
     }
 }

@@ -1,2 +1,1 @@
-SOUND=1
-NAME=mihkat
+NAME=mishkat

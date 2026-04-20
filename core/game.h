@@ -33,6 +33,9 @@ public:
     void resumeGame();
 
     // Player name management
+    void beginNameEdit();
+    void saveNameEdit();
+    void cancelNameEdit();
     void appendPlayerNameCharacter(unsigned char key);
     void removeLastPlayerNameCharacter();
     void ensurePlayerName();
@@ -64,6 +67,9 @@ private:
     void handleTrapHit();
     void handleExitReached();
     void finalizeSessionIfNeeded();
+    void openSettings();
+    void syncSettingsDraftToPlayerName();
+    void syncPlayerNameToSettingsDraft();
 };
 
 #endif // GAME_H

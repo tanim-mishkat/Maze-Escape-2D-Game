@@ -17,8 +17,9 @@ struct GameStateData
     int levelClearBonus;
     bool scoreSaved;
     bool hasKey;
-    bool soundEnabled;
     char playerName[Config::MAX_PLAYER_NAME_LENGTH + 1];
+    char settingsDraftName[Config::MAX_PLAYER_NAME_LENGTH + 1];
+    bool settingsEditingName;
     int mouseX, mouseY;  // current mouse position in OpenGL coords (y=0 at bottom)
 
     GameStateData();

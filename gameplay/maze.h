@@ -12,9 +12,8 @@ public:
     Maze();
 
     void loadLevel(const LevelDefinition& level);
-    void generateProcedural(GridPos startPos, GridPos exitPos, int difficulty);
-    void placeRandomTiles(TileType tileType, int count);
     void removeTile(int row, int col);
+    void setTile(int row, int col, TileType tile);
 
     TileType getTile(int row, int col) const;
     TileType getTile(const GridPos& pos) const;
@@ -22,6 +21,8 @@ public:
     bool isWall(const GridPos& pos) const;
     bool isBlocking(int row, int col) const;
     bool isBlocking(const GridPos& pos) const;
+    bool isWalkable(int row, int col) const;
+    int countWalkableNeighbors(int row, int col) const;
 
     GridPos getExitPos() const { return exitPos; }
     const std::vector<GridPos>& getWinningPath() const { return winningPath; }
@@ -33,10 +34,7 @@ private:
     GridPos exitPos;
     std::vector<GridPos> winningPath;
 
-    void markWinningPath(const LevelDefinition& level);
     void markWinningPathFromVector();
-    bool canUseRandomCell(int row, int col) const;
-    int countProtectedNeighbors(int row, int col) const;
 };
 
 #endif // MAZE_H

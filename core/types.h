@@ -53,4 +53,22 @@ struct ScreenPos
     ScreenPos(float px, float py) : x(px), y(py) {}
 };
 
+struct RectF
+{
+    float x;
+    float y;
+    float width;
+    float height;
+
+    RectF() : x(0.0f), y(0.0f), width(0.0f), height(0.0f) {}
+    RectF(float px, float py, float w, float h)
+        : x(px), y(py), width(w), height(h) {}
+
+    bool contains(int px, int py) const
+    {
+        return px >= static_cast<int>(x) && px <= static_cast<int>(x + width)
+            && py >= static_cast<int>(y) && py <= static_cast<int>(y + height);
+    }
+};
+
 #endif // TYPES_H
