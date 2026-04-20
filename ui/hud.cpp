@@ -32,12 +32,13 @@ namespace HUD
     void drawHud(int windowWidth, int windowHeight, const GameStateData& gameState,
                 const Level& level, const Timer& timer, const HighScoreManager& highScores)
     {
+        const BoardMetrics& metrics = level.getMetrics();
         char timerText[32];
         char levelText[64];
         char scoreText[32];
-        char livesText[32];
+        char gridText[32];
+        char parText[32];
         char bestText[32];
-        const char* keyText = gameState.hasKey ? "YES" : "NO";
 
         std::snprintf(timerText, sizeof(timerText), "%.1fs", timer.getElapsedSeconds());
         
@@ -53,24 +54,26 @@ namespace HUD
         }
         
         std::snprintf(scoreText, sizeof(scoreText), "%d", gameState.score);
-        std::snprintf(livesText, sizeof(livesText), "%d / %d", gameState.lives, Config::MAX_LIVES);
+        std::snprintf(gridText, sizeof(gridText), "%dx%d",
+                     level.getMaze().getRows(), level.getMaze().getCols());
+        std::snprintf(parText, sizeof(parText), "%.0fs", level.getDefinition().parTimeMs / 1000.0f);
         std::snprintf(bestText, sizeof(bestText), "%d", highScores.getBestScore());
 
-        float panelX = Renderer::getSidebarX(windowWidth);
-        float panelY = Renderer::getSidebarY(windowHeight);
+        float panelX = Renderer::getSidebarX(windowWidth, metrics);
+        float panelY = Renderer::getSidebarY(windowHeight, metrics);
         float innerX = panelX + 16.0f;
-        float cardWidth = Config::SIDE_PANEL_WIDTH - 32.0f;
+        float cardWidth = metrics.sidePanelWidth - 32.0f;
         float halfWidth = (cardWidth - 10.0f) / 2.0f;
 
-        drawPanel(panelX, panelY, Config::SIDE_PANEL_WIDTH, Config::BOARD_HEIGHT,
+        drawPanel(panelX, panelY, metrics.sidePanelWidth, metrics.boardHeight,
                  0.52f, 0.74f, 1.0f);
-        TextRenderer::drawTextWithShadow(innerX, panelY + Config::BOARD_HEIGHT - 30.0f,
+        TextRenderer::drawTextWithShadow(innerX, panelY + metrics.boardHeight - 30.0f,
                                         "Run Panel", 0.98f, 0.92f, 0.58f);
-        TextRenderer::drawTextWithShadow(innerX, panelY + Config::BOARD_HEIGHT - 56.0f,
-                                        "Find the key, reach the exit!",
+        TextRenderer::drawTextWithShadow(innerX, panelY + metrics.boardHeight - 56.0f,
+                                        "Read the maze, reach the exit!",
                                         0.82f, 0.92f, 1.0f);
 
-        float top = panelY + Config::BOARD_HEIGHT;
+        float top = panelY + metrics.boardHeight;
         drawInfoCard(innerX, top - Config::HUD_CARD_PLAYER_OFFSET, cardWidth, Config::HUD_CARD_HEIGHT_TALL,
                     "Player", gameState.playerName, 0.58f, 0.90f, 0.98f);
         drawInfoCard(innerX, top - Config::HUD_CARD_STAGE_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
@@ -80,9 +83,9 @@ namespace HUD
         drawInfoCard(innerX, top - Config::HUD_CARD_SCORE_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
                     "Score", scoreText, 0.70f, 0.95f, 0.74f);
         drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_LIVES_OFFSET,
-                    halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Lives", livesText, 1.0f, 0.78f, 0.72f);
-        drawInfoCard(innerX, top - Config::HUD_CARD_KEY_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
-                    "Key", keyText, 1.0f, 0.84f, 0.0f);
+                    halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Grid", gridText, 1.0f, 0.78f, 0.72f);
+        drawInfoCard(innerX, top - Config::HUD_CARD_PAR_OFFSET, halfWidth, Config::HUD_CARD_HEIGHT_SHORT,
+                    "Par", parText, 1.0f, 0.84f, 0.0f);
         drawInfoCard(innerX + halfWidth + 10.0f, top - Config::HUD_CARD_BEST_OFFSET,
                     halfWidth, Config::HUD_CARD_HEIGHT_SHORT, "Best", bestText, 0.98f, 0.92f, 0.58f);
 
@@ -90,12 +93,12 @@ namespace HUD
         TextRenderer::drawTextWithShadow(innerX + 14.0f, panelY + 146.0f, "Controls",
                                         0.84f, 0.92f, 1.0f);
         TextRenderer::drawTextWithShadow(innerX + 14.0f, panelY + 118.0f,
-                                        "W A S D  move one tile", 0.92f, 0.95f, 1.0f);
+                                        "Hold WASD / Arrows", 0.92f, 0.95f, 1.0f);
         TextRenderer::drawTextWithShadow(innerX + 14.0f, panelY + 92.0f,
-                                        "P        pause game", 0.92f, 0.95f, 1.0f);
+                                        "P or Esc pause", 0.92f, 0.95f, 1.0f);
         TextRenderer::drawTextWithShadow(innerX + 14.0f, panelY + 66.0f,
-                                        "R        restart level", 0.92f, 0.95f, 1.0f);
+                                        "R        restart run", 0.92f, 0.95f, 1.0f);
         TextRenderer::drawTextWithShadow(innerX + 14.0f, panelY + 40.0f,
-                                        "Esc      quit", 0.92f, 0.95f, 1.0f);
+                                        "M        main menu", 0.92f, 0.95f, 1.0f);
     }
 }

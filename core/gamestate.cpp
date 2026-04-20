@@ -10,9 +10,9 @@ GameStateData::GameStateData()
       menuSelection(0),
       lives(Config::MAX_LIVES),
       score(0),
-      levelClearBonus(0),
+      lastLevelScore(0),
+      lastLevelTimeMs(0),
       scoreSaved(false),
-      hasKey(false),
       settingsEditingName(false),
       mouseX(0),
       mouseY(0)
@@ -30,9 +30,9 @@ void GameStateData::reset()
     menuSelection = 0;
     lives = Config::MAX_LIVES;
     score = 0;
-    levelClearBonus = 0;
+    lastLevelScore = 0;
+    lastLevelTimeMs = 0;
     scoreSaved = false;
-    hasKey = false;
     settingsEditingName = false;
     std::snprintf(settingsDraftName, sizeof(settingsDraftName), "%s", playerName);
 }

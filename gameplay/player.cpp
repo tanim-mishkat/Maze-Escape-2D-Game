@@ -1,15 +1,13 @@
 #include "player.h"
-#include "../utils/coords.h"
 
 Player::Player()
-    : pos(0.0f, 0.0f), moveUp(false), moveDown(false), moveLeft(false), moveRight(false)
+    : pos(0, 0), moveUp(false), moveDown(false), moveLeft(false), moveRight(false)
 {
-    reset();
 }
 
-void Player::reset()
+void Player::reset(const GridPos& startPos)
 {
-    setPosition(Config::START_ROW, Config::START_COL);
+    setPosition(startPos);
     resetMovementFlags();
 }
 
@@ -20,12 +18,7 @@ void Player::setPosition(const GridPos& grid)
 
 void Player::setPosition(int row, int col)
 {
-    pos = Coords::playerGridToScreen(row, col, Config::PLAYER_PADDING);
-}
-
-GridPos Player::getGridPos() const
-{
-    return Coords::playerScreenToGrid(pos.x, pos.y, Config::PLAYER_SIZE);
+    pos = GridPos(row, col);
 }
 
 void Player::resetMovementFlags()

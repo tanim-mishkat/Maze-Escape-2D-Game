@@ -1,72 +1,125 @@
 #ifndef GENERATOR_H
 #define GENERATOR_H
 
-#include "../core/config.h"
 #include "../core/types.h"
 #include "../data/leveldata.h"
 #include <vector>
 
+class Maze;
+
 class MazeGenerator
 {
 public:
-    MazeGenerator();
-
-    void generate(int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
-                  GridPos startPos,
-                  const LevelDefinition& definition,
+    void generate(Maze& maze,
+                  const LevelSpec& definition,
                   GridPos& outExitPos,
-                  std::vector<GridPos>& outPath);
+                  std::vector<GridPos>& outPath) const;
 
 private:
-    static const int NODE_ROWS = (Config::MAZE_ROWS - 1) / 2;
-    static const int NODE_COLS = (Config::MAZE_COLS - 1) / 2;
-
     struct MazeCandidate
     {
-        int grid[Config::MAZE_ROWS][Config::MAZE_COLS];
+        std::vector<TileType> grid;
         GridPos exitPos;
-        std::vector<GridPos> solutionPath;
-        int solutionLength;
-        int deadEndCount;
+        std::vector<GridPos> criticalPath;
+        int criticalPathLength;
+        int deadEnds;
+        int turnCount;
+        int longestStraightRun;
+        int routeDetour;
+        int nearCriticalBranches;
+        int junctionCount;
+        int maxBranchDepth;
+        int secondOrderBranches;
         int score;
     };
 
-    struct CellCandidate
+    struct SpatialCandidate
     {
         GridPos pos;
-        int distanceFromSolution;
+        int distanceFromCritical;
+        int degree;
+        bool roomCell;
     };
 
-    bool visited[NODE_ROWS][NODE_COLS];
-
-    void initializeGrid(int grid[Config::MAZE_ROWS][Config::MAZE_COLS]);
+    void initializeGrid(std::vector<TileType>& grid, int rows, int cols) const;
     void generateLayout(MazeCandidate& outCandidate,
-                        const GridPos& startPos,
-                        unsigned int seed);
-    void carvePerfectMaze(int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
-                          const GridPos& startNode,
-                          unsigned int seed);
-    void buildSolutionPath(const int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
-                           const GridPos& startNode,
-                           GridPos& outExitNode,
+                        const LevelSpec& definition,
+                        unsigned int seed) const;
+    void carvePerfectMaze(std::vector<TileType>& grid,
+                          const LevelSpec& definition,
+                          unsigned int seed) const;
+    void buildCriticalPath(const std::vector<TileType>& grid,
+                           const LevelSpec& definition,
+                           GridPos& outExitPos,
                            std::vector<GridPos>& outPath) const;
-    void applyObjectivesAndHazards(int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
-                                   const std::vector<GridPos>& solutionPath,
-                                   const GridPos& exitPos,
-                                   const LevelDefinition& definition,
-                                   unsigned int seed) const;
-    void computeDistanceFromSolution(const int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
-                                     const std::vector<GridPos>& solutionPath,
-                                     int distances[Config::MAZE_ROWS][Config::MAZE_COLS]) const;
-    GridPos chooseKeyCell(const std::vector<GridPos>& solutionPath,
-                          int keyProgressPercent) const;
-    int countDeadEnds(const int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
-                      const std::vector<GridPos>& solutionPath) const;
-    int countWalkableNeighbors(const int grid[Config::MAZE_ROWS][Config::MAZE_COLS],
+    void enhanceLayout(std::vector<TileType>& grid,
+                       const LevelSpec& definition,
+                       const std::vector<GridPos>& criticalPath,
+                       const GridPos& exitPos,
+                       unsigned int seed) const;
+    int carveRooms(std::vector<TileType>& grid,
+                   const LevelSpec& definition,
+                   const std::vector<unsigned char>& criticalMask,
+                   std::vector<unsigned char>& roomMask,
+                   std::vector<unsigned char>& doorwayMask,
+                   unsigned int seed) const;
+    int addLoops(std::vector<TileType>& grid,
+                 const LevelSpec& definition,
+                 const std::vector<unsigned char>& criticalMask,
+                 const std::vector<unsigned char>& roomMask,
+                 const std::vector<unsigned char>& doorwayMask,
+                 unsigned int seed) const;
+    int addDecisionJunctions(std::vector<TileType>& grid,
+                             const LevelSpec& definition,
+                             const std::vector<GridPos>& criticalPath,
+                             const GridPos& exitPos,
+                             const std::vector<unsigned char>& roomMask,
+                             const std::vector<unsigned char>& doorwayMask,
+                             unsigned int seed) const;
+    void computeDistanceFromCritical(const std::vector<TileType>& grid,
+                                     int rows,
+                                     int cols,
+                                     const std::vector<GridPos>& criticalPath,
+                                     std::vector<int>& distances) const;
+    int countDeadEnds(const std::vector<TileType>& grid,
+                      int rows,
+                      int cols,
+                      const std::vector<GridPos>& criticalPath) const;
+    int countWalkableNeighbors(const std::vector<TileType>& grid,
+                               int rows,
+                               int cols,
                                int row,
                                int col) const;
-    bool isNodeValid(int row, int col) const;
-    bool isWalkableValue(int tileValue) const;
+    int countTurns(const std::vector<GridPos>& path) const;
+    int computeLongestStraightRun(const std::vector<GridPos>& path) const;
+    int computeMaxDistance(const std::vector<int>& distances) const;
+    int countCellsAtDistance(const std::vector<int>& distances, int minDistance) const;
+    int countCellsInDistanceRange(const std::vector<int>& distances,
+                                  int minDistance,
+                                  int maxDistance) const;
+    int countDecisionJunctions(const std::vector<TileType>& grid,
+                               int rows,
+                               int cols) const;
+    int shortestPathLength(const std::vector<TileType>& grid,
+                           int rows,
+                           int cols,
+                           const GridPos& start,
+                           const GridPos& target) const;
+
+    bool tryCarveRoom(std::vector<TileType>& grid,
+                      int rows,
+                      int cols,
+                      const GridPos& doorway,
+                      int directionRow,
+                      int directionCol,
+                      int roomRows,
+                      int roomCols,
+                      std::vector<unsigned char>& roomMask,
+                      std::vector<unsigned char>& doorwayMask) const;
+    bool isWalkableValue(TileType tileValue) const;
+    bool isInBounds(int rows, int cols, int row, int col) const;
+    bool isNodeCell(const GridPos& pos) const;
+    int toIndex(int cols, int row, int col) const { return row * cols + col; }
     GridPos gridToNode(const GridPos& gridPos) const;
     GridPos nodeToGrid(const GridPos& nodePos) const;
 };

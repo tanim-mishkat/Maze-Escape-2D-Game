@@ -315,7 +315,7 @@ namespace Menu
         TextRenderer::drawTextWithShadow(cardX + 24.0f, objectiveY + objectiveH - 38.0f,
                                          "OBJECTIVE", 0.58f, 0.90f, 0.98f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, objectiveY + 30.0f,
-                                         "Find the golden key, then reach the exit flag!",
+                                         "Reach the exit through the correct route.",
                                          0.92f, 0.95f, 1.0f);
 
         HUD::drawPanel(cardX, controlsY, cardW, controlsH,
@@ -323,24 +323,24 @@ namespace Menu
         TextRenderer::drawTextWithShadow(cardX + 24.0f, controlsY + controlsH - 38.0f,
                                          "CONTROLS", 0.70f, 0.95f, 0.74f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, controlsY + 84.0f,
-                                         "WASD or Arrow Keys - Move one tile",
+                                         "Hold WASD or Arrow Keys - Move tile by tile",
                                          0.92f, 0.95f, 1.0f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, controlsY + 52.0f,
-                                         "P - Pause game",
+                                         "P or ESC - Pause game",
                                          0.92f, 0.95f, 1.0f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, controlsY + 20.0f,
-                                         "R - Restart current level",
+                                         "R - Restart the current run",
                                          0.92f, 0.95f, 1.0f);
 
         HUD::drawPanel(cardX, hazardsY, cardW, hazardsH,
                        0.98f, 0.82f, 0.44f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, hazardsY + hazardsH - 38.0f,
-                                         "HAZARDS", 0.98f, 0.82f, 0.44f);
+                                         "MAZE DESIGN", 0.98f, 0.82f, 0.44f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, hazardsY + 44.0f,
-                                         "Red Traps - Lose 1 life and 125 points",
+                                         "Each map now includes several 3-way and 4-way intersections.",
                                          0.92f, 0.95f, 1.0f);
         TextRenderer::drawTextWithShadow(cardX + 24.0f, hazardsY + 12.0f,
-                                         "Brown Obstacles - Block your path",
+                                         "Most branches mislead or loop back, so read each junction carefully.",
                                          0.92f, 0.95f, 1.0f);
 
         RectF backButton = getHowToPlayBackButtonRect(windowWidth, windowHeight);

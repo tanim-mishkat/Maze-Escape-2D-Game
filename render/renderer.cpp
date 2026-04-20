@@ -6,8 +6,16 @@
 
 namespace Renderer
 {
+    namespace
+    {
+        float maxFloat(float a, float b)
+        {
+            return a > b ? a : b;
+        }
+    }
+
     void drawFilledRect(float x, float y, float width, float height,
-                       float r, float g, float b, float a)
+                        float r, float g, float b, float a)
     {
         glColor4f(r, g, b, a);
         glBegin(GL_QUADS);
@@ -19,7 +27,7 @@ namespace Renderer
     }
 
     void drawRectOutline(float x, float y, float width, float height,
-                        float lineWidth, float r, float g, float b, float a)
+                         float lineWidth, float r, float g, float b, float a)
     {
         glLineWidth(lineWidth);
         glColor4f(r, g, b, a);
@@ -31,247 +39,155 @@ namespace Renderer
         glEnd();
     }
 
-    void drawFloor()
+    void drawFloor(const BoardMetrics& metrics)
     {
-        for (int row = 0; row < Config::MAZE_ROWS; row++)
+        for (int row = 0; row < metrics.rows; row++)
         {
-            for (int col = 0; col < Config::MAZE_COLS; col++)
+            for (int col = 0; col < metrics.cols; col++)
             {
-                ScreenPos pos = Coords::gridToScreen(row, col);
+                ScreenPos pos = Coords::gridToScreen(metrics, row, col);
                 float shade = ((row + col) % 2 == 0) ? 0.10f : 0.12f;
-                drawFilledRect(pos.x, pos.y, Config::TILE_SIZE, Config::TILE_SIZE,
-                             shade, shade + 0.02f, shade + 0.04f);
+                drawFilledRect(pos.x, pos.y, metrics.tileSize, metrics.tileSize,
+                               shade, shade + 0.02f, shade + 0.04f);
             }
         }
     }
 
     void drawMaze(const Maze& maze)
     {
-        for (int row = 0; row < Config::MAZE_ROWS; row++)
+        const BoardMetrics& metrics = maze.getMetrics();
+        for (int row = 0; row < maze.getRows(); row++)
         {
-            for (int col = 0; col < Config::MAZE_COLS; col++)
+            for (int col = 0; col < maze.getCols(); col++)
             {
                 if (maze.getTile(row, col) == TILE_WALL)
                 {
-                    ScreenPos pos = Coords::gridToScreen(row, col);
-                    drawFilledRect(pos.x, pos.y, Config::TILE_SIZE, Config::TILE_SIZE,
-                                 Colors::WALL_DARK_R, Colors::WALL_DARK_G, Colors::WALL_DARK_B);
-                    drawFilledRect(pos.x + Config::TILE_INNER_PADDING, pos.y + Config::TILE_INNER_PADDING,
-                                 Config::TILE_INNER_SIZE, Config::TILE_INNER_SIZE,
-                                 Colors::WALL_LIGHT_R, Colors::WALL_LIGHT_G, Colors::WALL_LIGHT_B);
-                    drawRectOutline(pos.x + Config::TILE_INNER_PADDING, pos.y + Config::TILE_INNER_PADDING,
-                                  Config::TILE_INNER_SIZE, Config::TILE_INNER_SIZE,
-                                  1.5f, 0.72f, 0.86f, 1.0f, 0.6f);
+                    ScreenPos pos = Coords::gridToScreen(metrics, row, col);
+                    drawFilledRect(pos.x, pos.y, metrics.tileSize, metrics.tileSize,
+                                   Colors::WALL_DARK_R, Colors::WALL_DARK_G, Colors::WALL_DARK_B);
+                    drawFilledRect(pos.x + metrics.tileInnerPadding,
+                                   pos.y + metrics.tileInnerPadding,
+                                   metrics.tileInnerSize,
+                                   metrics.tileInnerSize,
+                                   Colors::WALL_LIGHT_R, Colors::WALL_LIGHT_G, Colors::WALL_LIGHT_B);
+                    drawRectOutline(pos.x + metrics.tileInnerPadding,
+                                    pos.y + metrics.tileInnerPadding,
+                                    metrics.tileInnerSize,
+                                    metrics.tileInnerSize,
+                                    maxFloat(1.0f, metrics.tileSize * 0.03f),
+                                    0.72f, 0.86f, 1.0f, 0.6f);
                 }
             }
         }
     }
 
-    void drawExit(const Maze& maze, float animationTime, bool hasKey)
+    void drawExit(const Maze& maze, float animationTime)
     {
+        const BoardMetrics& metrics = maze.getMetrics();
         GridPos exitPos = maze.getExitPos();
-        ScreenPos pos = Coords::gridToScreen(exitPos);
-        TileType exitTile = maze.getTile(exitPos);
-        bool isLocked = (exitTile == TILE_LOCKED_EXIT);
-
+        ScreenPos pos = Coords::gridToScreen(metrics, exitPos);
         float pulse = 0.5f + 0.5f * std::sin(animationTime * 4.0f);
-        float poleX = pos.x + 15.0f;
-        float poleY = pos.y + 8.0f;
-        float poleHeight = 30.0f;
-        float flagWidth = 16.0f + pulse * 6.0f;
-        float glowWidth = 18.0f + pulse * 6.0f;
+        float glowInset = metrics.tileSize * 0.16f;
+        float poleX = pos.x + metrics.tileSize * 0.30f;
+        float poleY = pos.y + metrics.tileSize * 0.16f;
+        float poleWidth = maxFloat(2.0f, metrics.tileSize * 0.08f);
+        float poleHeight = metrics.tileSize * 0.60f;
+        float flagWidth = metrics.tileSize * (0.30f + pulse * 0.12f);
+        float flagOffsetY = metrics.tileSize * 0.16f;
 
-        // Background with lock status color
-        if (isLocked && !hasKey)
-        {
-            drawFilledRect(pos.x, pos.y, Config::TILE_SIZE, Config::TILE_SIZE,
-                         0.26f, 0.18f, 0.18f, 0.45f);
-        }
-        else
-        {
-            drawFilledRect(pos.x, pos.y, Config::TILE_SIZE, Config::TILE_SIZE,
-                         0.18f, 0.26f, 0.12f, 0.45f);
-        }
-        
-        // Glow effect
-        drawFilledRect(pos.x - 8.0f, pos.y + 8.0f, glowWidth,
-                     Config::TILE_SIZE - 16.0f, 1.0f, 0.88f, 0.35f, 0.18f + pulse * 0.12f);
+        drawFilledRect(pos.x, pos.y, metrics.tileSize, metrics.tileSize,
+                       0.18f, 0.26f, 0.12f, 0.45f);
 
-        // Pole
-        drawFilledRect(poleX, poleY, 4.0f, poleHeight, 0.92f, 0.95f, 1.0f);
-        drawFilledRect(poleX - 6.0f, poleY - 2.0f, 16.0f, 4.0f, 0.40f, 0.28f, 0.12f);
+        drawFilledRect(pos.x + glowInset * 0.25f,
+                       pos.y + glowInset,
+                       metrics.tileSize - glowInset * 0.5f,
+                       metrics.tileSize - glowInset * 2.0f,
+                       1.0f, 0.88f, 0.35f, 0.14f + pulse * 0.12f);
 
-        // Flag color depends on lock status
-        if (isLocked && !hasKey)
-        {
-            glColor4f(0.6f, 0.1f + pulse * 0.10f, 0.1f, 1.0f);
-        }
-        else
-        {
-            glColor4f(0.2f, 1.0f - pulse * 0.10f, 0.3f, 1.0f);
-        }
-        
+        drawFilledRect(poleX, poleY, poleWidth, poleHeight, 0.92f, 0.95f, 1.0f);
+        drawFilledRect(poleX - metrics.tileSize * 0.08f,
+                       poleY - metrics.tileSize * 0.04f,
+                       metrics.tileSize * 0.20f,
+                       maxFloat(2.0f, metrics.tileSize * 0.06f),
+                       0.40f, 0.28f, 0.12f);
+
+        glColor4f(0.2f, 0.96f - pulse * 0.10f, 0.3f, 1.0f);
+
         glBegin(GL_TRIANGLES);
-            glVertex2f(poleX + 4.0f, poleY + poleHeight - 2.0f);
-            glVertex2f(poleX + 4.0f + flagWidth, poleY + poleHeight - 7.0f);
-            glVertex2f(poleX + 4.0f, poleY + poleHeight - 12.0f);
+            glVertex2f(poleX + poleWidth,
+                       poleY + poleHeight - flagOffsetY * 0.25f);
+            glVertex2f(poleX + poleWidth + flagWidth,
+                       poleY + poleHeight - flagOffsetY * 0.60f);
+            glVertex2f(poleX + poleWidth,
+                       poleY + poleHeight - flagOffsetY);
         glEnd();
 
-        // Lock icon if locked
-        if (isLocked && !hasKey)
-        {
-            float lockX = pos.x + Config::TILE_SIZE - 18.0f;
-            float lockY = pos.y + 8.0f;
-            drawFilledRect(lockX, lockY, 10.0f, 12.0f, 0.8f, 0.2f, 0.2f, 0.9f);
-            drawFilledRect(lockX + 2.0f, lockY + 6.0f, 6.0f, 6.0f, 0.3f, 0.1f, 0.1f);
-        }
-
-        drawRectOutline(pos.x + Config::TILE_INNER_PADDING, pos.y + Config::TILE_INNER_PADDING,
-                      Config::TILE_INNER_SIZE, Config::TILE_INNER_SIZE,
-                      1.5f, 1.0f, 0.94f, 0.60f, 0.55f);
+        drawRectOutline(pos.x + metrics.tileInnerPadding,
+                        pos.y + metrics.tileInnerPadding,
+                        metrics.tileInnerSize,
+                        metrics.tileInnerSize,
+                        maxFloat(1.0f, metrics.tileSize * 0.03f),
+                        1.0f, 0.94f, 0.60f, 0.55f);
     }
 
-    void drawTraps(const Maze& maze, float animationTime)
+    void drawPlayer(const Player& player, const BoardMetrics& metrics)
     {
-        for (int row = 0; row < Config::MAZE_ROWS; row++)
-        {
-            for (int col = 0; col < Config::MAZE_COLS; col++)
-            {
-                if (maze.getTile(row, col) == TILE_TRAP)
-                {
-                    ScreenPos pos = Coords::gridToScreen(row, col);
-                    float x = pos.x + 10.0f;
-                    float y = pos.y + 10.0f;
-                    float size = Config::TILE_SIZE - 20.0f;
-                    float blink = 0.5f + 0.5f * std::sin(animationTime * 7.0f + row + col);
+        ScreenPos pos = Coords::gridToScreen(metrics, player.getGridPos());
+        float x = pos.x + metrics.playerPadding;
+        float y = pos.y + metrics.playerPadding;
+        float size = metrics.playerSize;
+        float shadowOffset = maxFloat(1.0f, metrics.tileSize * 0.06f);
+        float innerInset = maxFloat(1.5f, size * 0.16f);
 
-                    drawFilledRect(x, y, size, size,
-                                 0.55f + blink * 0.35f, 0.10f + blink * 0.10f, 0.14f + blink * 0.12f);
-                    drawRectOutline(x, y, size, size, 2.0f, 1.0f, 0.70f, 0.70f, 0.85f);
-
-                    glLineWidth(3.0f);
-                    glColor4f(1.0f, 0.90f, 0.90f, 0.85f);
-                    glBegin(GL_LINES);
-                        glVertex2f(x + 6.0f, y + 6.0f);
-                        glVertex2f(x + size - 6.0f, y + size - 6.0f);
-                        glVertex2f(x + size - 6.0f, y + 6.0f);
-                        glVertex2f(x + 6.0f, y + size - 6.0f);
-                    glEnd();
-                }
-            }
-        }
-    }
-
-    void drawObstacles(const Maze& maze)
-    {
-        for (int row = 0; row < Config::MAZE_ROWS; row++)
-        {
-            for (int col = 0; col < Config::MAZE_COLS; col++)
-            {
-                if (maze.getTile(row, col) == TILE_OBSTACLE)
-                {
-                    ScreenPos pos = Coords::gridToScreen(row, col);
-                    float x = pos.x + 8.0f;
-                    float y = pos.y + 8.0f;
-                    float size = Config::TILE_SIZE - 16.0f;
-
-                    drawFilledRect(x, y, size, size, 0.28f, 0.22f, 0.18f);
-                    drawFilledRect(x + 5.0f, y + 5.0f, size - 10.0f, size - 10.0f,
-                                 0.50f, 0.40f, 0.30f);
-                    drawRectOutline(x, y, size, size, 2.0f, 0.84f, 0.74f, 0.58f, 0.75f);
-                }
-            }
-        }
-    }
-
-    void drawKeys(const Maze& maze, float animationTime)
-    {
-        for (int row = 0; row < Config::MAZE_ROWS; row++)
-        {
-            for (int col = 0; col < Config::MAZE_COLS; col++)
-            {
-                if (maze.getTile(row, col) == TILE_KEY)
-                {
-                    ScreenPos pos = Coords::gridToScreen(row, col);
-                    float x = pos.x + Config::TILE_SIZE / 2.0f;
-                    float y = pos.y + Config::TILE_SIZE / 2.0f;
-                    float bounce = 3.0f * std::sin(animationTime * 5.0f);
-                    float glow = 0.3f + 0.3f * std::sin(animationTime * 6.0f);
-
-                    // Glow effect
-                    drawFilledRect(pos.x + 8.0f, pos.y + 8.0f,
-                                 Config::TILE_SIZE - 16.0f, Config::TILE_SIZE - 16.0f,
-                                 1.0f, 0.84f, 0.0f, glow);
-
-                    // Key body
-                    float keyX = x - 8.0f;
-                    float keyY = y + bounce - 6.0f;
-                    drawFilledRect(keyX, keyY, 16.0f, 4.0f, 1.0f, 0.84f, 0.0f);
-                    
-                    // Key head (circle approximation)
-                    drawFilledRect(keyX - 4.0f, keyY - 2.0f, 6.0f, 8.0f, 1.0f, 0.84f, 0.0f);
-                    drawFilledRect(keyX - 2.0f, keyY - 4.0f, 2.0f, 12.0f, 1.0f, 0.84f, 0.0f);
-                    
-                    // Key teeth
-                    drawFilledRect(keyX + 12.0f, keyY + 4.0f, 2.0f, 3.0f, 1.0f, 0.84f, 0.0f);
-                    drawFilledRect(keyX + 15.0f, keyY + 4.0f, 2.0f, 2.0f, 1.0f, 0.84f, 0.0f);
-                }
-            }
-        }
-    }
-
-    void drawPlayer(const Player& player)
-    {
-        float x = player.getX();
-        float y = player.getY();
-        float size = player.getSize();
-
-        drawFilledRect(x + 3.0f, y - 3.0f, size, size, 0.0f, 0.0f, 0.0f, 0.22f);
+        drawFilledRect(x + shadowOffset, y - shadowOffset, size, size, 0.0f, 0.0f, 0.0f, 0.22f);
         drawFilledRect(x, y, size, size, Colors::PLAYER_R, Colors::PLAYER_G, Colors::PLAYER_B);
-        drawFilledRect(x + 5.0f, y + 5.0f, size - 10.0f, size - 10.0f,
-                     Colors::PLAYER_LIGHT_R, Colors::PLAYER_LIGHT_G, Colors::PLAYER_LIGHT_B);
-        drawRectOutline(x, y, size, size, 2.0f, 0.95f, 1.0f, 0.97f, 0.9f);
+        drawFilledRect(x + innerInset, y + innerInset,
+                       size - innerInset * 2.0f, size - innerInset * 2.0f,
+                       Colors::PLAYER_LIGHT_R, Colors::PLAYER_LIGHT_G, Colors::PLAYER_LIGHT_B);
+        drawRectOutline(x, y, size, size,
+                        maxFloat(1.0f, metrics.tileSize * 0.05f),
+                        0.95f, 1.0f, 0.97f, 0.9f);
     }
 
-    float getGameCanvasWidth()
+    float getGameCanvasWidth(const BoardMetrics& metrics)
     {
-        return Config::BOARD_WIDTH + Config::SIDE_PANEL_WIDTH + 52.0f;
+        return metrics.boardWidth + metrics.sidePanelWidth + 52.0f;
     }
 
-    float getGameCanvasHeight()
+    float getGameCanvasHeight(const BoardMetrics& metrics)
     {
-        return Config::BOARD_HEIGHT + 40.0f;
+        return metrics.boardHeight + 40.0f;
     }
 
-    float getGameCanvasX(int windowWidth)
+    float getGameCanvasX(int windowWidth, const BoardMetrics& metrics)
     {
-        float x = (windowWidth - getGameCanvasWidth()) / 2.0f;
+        float x = (windowWidth - getGameCanvasWidth(metrics)) * 0.5f;
         return x < 16.0f ? 16.0f : x;
     }
 
-    float getGameCanvasY(int windowHeight)
+    float getGameCanvasY(int windowHeight, const BoardMetrics& metrics)
     {
-        float y = (windowHeight - getGameCanvasHeight()) / 2.0f;
+        float y = (windowHeight - getGameCanvasHeight(metrics)) * 0.5f;
         return y < 16.0f ? 16.0f : y;
     }
 
-    float getBoardOriginX(int windowWidth)
+    float getBoardOriginX(int windowWidth, const BoardMetrics& metrics)
     {
-        return getGameCanvasX(windowWidth) + Config::CANVAS_MARGIN;
+        return getGameCanvasX(windowWidth, metrics) + metrics.canvasMargin;
     }
 
-    float getBoardOriginY(int windowHeight)
+    float getBoardOriginY(int windowHeight, const BoardMetrics& metrics)
     {
-        return getGameCanvasY(windowHeight) + Config::CANVAS_MARGIN;
+        return getGameCanvasY(windowHeight, metrics) + metrics.canvasMargin;
     }
 
-    float getSidebarX(int windowWidth)
+    float getSidebarX(int windowWidth, const BoardMetrics& metrics)
     {
-        return getBoardOriginX(windowWidth) + Config::BOARD_WIDTH + Config::SIDEBAR_MARGIN;
+        return getBoardOriginX(windowWidth, metrics) + metrics.boardWidth + metrics.sidebarMargin;
     }
 
-    float getSidebarY(int windowHeight)
+    float getSidebarY(int windowHeight, const BoardMetrics& metrics)
     {
-        return getBoardOriginY(windowHeight);
+        return getBoardOriginY(windowHeight, metrics);
     }
 }

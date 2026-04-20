@@ -1,70 +1,72 @@
 #include "maze.h"
 #include "generator.h"
 
-Maze::Maze() : exitPos(0, 0)
+Maze::Maze()
+    : rows(0),
+      cols(0),
+      startPos(0, 0),
+      exitPos(0, 0)
 {
-    for (int row = 0; row < Config::MAZE_ROWS; row++)
-    {
-        for (int col = 0; col < Config::MAZE_COLS; col++)
-        {
-            grid[row][col] = TILE_WALL;
-            protectedPath[row][col] = false;
-        }
-    }
 }
 
-void Maze::loadLevel(const LevelDefinition& level)
+void Maze::resize(int newRows, int newCols)
 {
+    rows = newRows;
+    cols = newCols;
+    metrics = Config::makeBoardMetrics(rows, cols);
+    grid.assign(rows * cols, TILE_WALL);
+    protectedPath.assign(rows * cols, 0);
     winningPath.clear();
+}
+
+void Maze::loadLevel(const LevelSpec& level)
+{
+    resize(level.rows, level.cols);
+    startPos = level.startPos;
+    exitPos = level.startPos;
 
     MazeGenerator generator;
-    generator.generate(grid,
-                       GridPos(Config::START_ROW, Config::START_COL),
-                       level,
-                       exitPos,
-                       winningPath);
+    generator.generate(*this, level, exitPos, winningPath);
     markWinningPathFromVector();
 }
 
 void Maze::markWinningPathFromVector()
 {
-    for (int row = 0; row < Config::MAZE_ROWS; row++)
-    {
-        for (int col = 0; col < Config::MAZE_COLS; col++)
-        {
-            protectedPath[row][col] = false;
-        }
-    }
+    protectedPath.assign(rows * cols, 0);
 
     for (std::size_t i = 0; i < winningPath.size(); i++)
     {
-        protectedPath[winningPath[i].row][winningPath[i].col] = true;
+        if (isInBounds(winningPath[i].row, winningPath[i].col))
+        {
+            protectedPath[toIndex(winningPath[i].row, winningPath[i].col)] = 1;
+        }
     }
 }
 
 void Maze::removeTile(int row, int col)
 {
-    if (row >= 0 && row < Config::MAZE_ROWS && col >= 0 && col < Config::MAZE_COLS)
+    if (isInBounds(row, col))
     {
-        grid[row][col] = TILE_PATH;
+        grid[toIndex(row, col)] = TILE_PATH;
     }
 }
 
 void Maze::setTile(int row, int col, TileType tile)
 {
-    if (row >= 0 && row < Config::MAZE_ROWS && col >= 0 && col < Config::MAZE_COLS)
+    if (isInBounds(row, col))
     {
-        grid[row][col] = tile;
+        grid[toIndex(row, col)] = tile;
     }
 }
 
 TileType Maze::getTile(int row, int col) const
 {
-    if (row < 0 || row >= Config::MAZE_ROWS || col < 0 || col >= Config::MAZE_COLS)
+    if (!isInBounds(row, col))
     {
         return TILE_WALL;
     }
-    return static_cast<TileType>(grid[row][col]);
+
+    return grid[toIndex(row, col)];
 }
 
 TileType Maze::getTile(const GridPos& pos) const
@@ -85,7 +87,7 @@ bool Maze::isWall(const GridPos& pos) const
 bool Maze::isBlocking(int row, int col) const
 {
     TileType tile = getTile(row, col);
-    return tile == TILE_WALL || tile == TILE_OBSTACLE;
+    return tile == TILE_WALL;
 }
 
 bool Maze::isBlocking(const GridPos& pos) const
@@ -117,7 +119,17 @@ int Maze::countWalkableNeighbors(int row, int col) const
     return neighbors;
 }
 
+bool Maze::isProtected(int row, int col) const
+{
+    if (!isInBounds(row, col))
+    {
+        return false;
+    }
+
+    return protectedPath[toIndex(row, col)] != 0;
+}
+
 bool Maze::isInBounds(int row, int col) const
 {
-    return row >= 0 && row < Config::MAZE_ROWS && col >= 0 && col < Config::MAZE_COLS;
+    return row >= 0 && row < rows && col >= 0 && col < cols;
 }

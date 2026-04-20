@@ -4,25 +4,26 @@ Maze Runner is a 2D maze escape game built with C++, OpenGL, and FreeGLUT. The p
 
 ## Project Overview
 
-The game runs as a five-stage campaign on a fixed 12x16 grid. Each stage generates a maze with a single valid route from the start to the locked exit. The player must find the key placed along that route, avoid traps and blocking obstacles on misleading branches, and finish quickly to maximize score.
+The game runs as a five-stage campaign with per-level maze sizes ranging from `15x21` to `29x41`. Each stage generates a dense, deterministic maze with one guaranteed route from the start to the exit plus many misleading branches, dead ends, rooms, limited late-stage loops, and several deliberate 3-way or 4-way decision junctions. Score is derived from completion time, so faster clears earn higher totals.
 
 ## Gameplay Summary
 
-- Start from the fixed spawn point and move one tile at a time.
-- Find the key before attempting to leave through the exit.
-- Explore carefully: side paths can lead to dead ends, traps, or blocked routes.
-- Finish all five stages before running out of lives.
+- Start from the stage entrance and move tile by tile through a procedurally generated maze.
+- Reach the exit as quickly as possible to maximize your score.
+- Explore carefully: side paths can lead to dead ends, rooms, loops, and misleading junctions.
+- Finish all five stages as quickly as possible.
 
 ## Features
 
 - Procedural maze generation with deterministic per-level specifications
 - One guaranteed start-to-exit solution path per stage
-- Dead ends, traps, and obstacles placed to increase navigation difficulty
-- Key-and-locked-exit objective on every stage
-- Score, timer, life, and high-score systems
+- Dense branch layouts with dead ends, rooms, and limited late-stage loops
+- Multiple 3-way and 4-way intersections per stage to create route uncertainty
+- Score, timer, and high-score systems
+- Hold-to-move keyboard input for both WASD and arrow keys
 - Mouse-clickable menus, overlays, and settings UI
 - Editable player name saved between sessions
-- Animated exit flag, traps, key, and styled HUD/overlay panels
+- Animated exit flag and styled HUD/overlay panels
 
 ## Tech Stack
 
@@ -32,13 +33,13 @@ The game runs as a five-stage campaign on a fixed 12x16 grid. Each stage generat
 
 ## Campaign Stages
 
-| Stage | Name | Traps | Obstacles | Par Time |
-|-------|------|-------|-----------|----------|
-| 1 | Orientation Grid | 3 | 1 | 30s |
-| 2 | Archive Drift | 4 | 2 | 28s |
-| 3 | Foundry Knots | 5 | 2 | 26s |
-| 4 | Blackout Loop | 6 | 3 | 24s |
-| 5 | Final Nexus | 7 | 3 | 22s |
+| Stage | Name | Grid | Decision Junctions | Par Time |
+|-------|------|------|--------------------|----------|
+| 1 | Orientation Grid | 15x21 | 4 | 35s |
+| 2 | Archive Drift | 17x25 | 4 | 42s |
+| 3 | Foundry Knots | 19x29 | 4 | 50s |
+| 4 | Blackout Loop | 25x35 | 5 | 68s |
+| 5 | Final Nexus | 29x41 | 6 | 82s |
 
 ## Project Structure
 
@@ -94,7 +95,7 @@ g++ -o maze_runner.exe main.cpp core/game.cpp core/gamestate.cpp gameplay/player
 
 ### Gameplay
 
-- `W`, `A`, `S`, `D` or arrow keys: move one tile
+- `W`, `A`, `S`, `D` or arrow keys: move tile by tile, including hold-to-move
 - `P`: pause
 - `Esc`: pause during gameplay
 - `M`: return to the main menu
@@ -118,13 +119,12 @@ g++ -o maze_runner.exe main.cpp core/game.cpp core/gamestate.cpp gameplay/player
 
 ## Game Objective and Rules
 
-- The player starts at row `9`, column `1`.
-- Every stage requires collecting the key before the locked exit can be used.
-- Walls and brown obstacles block movement.
-- Red traps deduct `1` life and `125` points, then respawn the player at the start.
-- Picking up a key awards `200` points.
-- Clearing a stage awards a level bonus based on stage data, clear time, and remaining lives.
-- Losing all lives ends the run. Clearing stage 5 wins the campaign.
+- The player starts at the stage-specific entrance defined in `data/leveldata.cpp`.
+- Reaching the exit wins the stage immediately.
+- Walls block movement.
+- The generator deliberately introduces several 3-way and 4-way intersections on every stage.
+- Stage score is based on completion time relative to that stage's par time.
+- Clearing stage 5 wins the campaign.
 
 ## Configuration Notes
 
@@ -136,13 +136,13 @@ g++ -o maze_runner.exe main.cpp core/game.cpp core/gamestate.cpp gameplay/player
 
 ## Screenshots and Assets
 
-This repository does not include a dedicated screenshot, texture, or audio asset folder. The maze, player, traps, key, exit flag, HUD, menus, and overlays are drawn procedurally in the `render/` and `ui/` modules.
+This repository does not include a dedicated screenshot, texture, or audio asset folder. The maze, player, exit flag, HUD, menus, and overlays are drawn procedurally in the `render/` and `ui/` modules.
 
 ## Known Limitations
 
 - The included build automation is Windows-only (`build.bat`).
 - Rendering uses OpenGL immediate mode and GLUT bitmap fonts.
-- Grid size and campaign length are compile-time constants (`12x16`, `5` stages).
+- Campaign length is a compile-time constant (`5` stages), while individual stage grid sizes come from `data/leveldata.cpp`.
 - Runtime data is written to text files in the repository root.
 - `R` is state-dependent: in the pause menu it restarts the current level, while during active play and on end screens it restarts the run.
 - No audio system is implemented in the current codebase.

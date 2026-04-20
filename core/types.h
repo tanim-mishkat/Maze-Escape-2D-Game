@@ -5,11 +5,7 @@
 enum TileType
 {
     TILE_PATH = 0,
-    TILE_WALL = 1,
-    TILE_TRAP = 2,
-    TILE_OBSTACLE = 3,
-    TILE_KEY = 4,
-    TILE_LOCKED_EXIT = 5
+    TILE_WALL = 1
 };
 
 // Game state machine

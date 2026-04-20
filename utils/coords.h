@@ -6,20 +6,10 @@
 
 namespace Coords
 {
-    // Convert grid position to screen position (top-left of tile)
-    ScreenPos gridToScreen(const GridPos& grid);
-    ScreenPos gridToScreen(int row, int col);
-
-    // Convert screen position to grid position
-    GridPos screenToGrid(const ScreenPos& screen);
-    GridPos screenToGrid(float x, float y);
-
-    // Get player's grid position from screen position (center-based)
-    GridPos playerScreenToGrid(float playerX, float playerY, float playerSize);
-
-    // Get player's screen position from grid position (with padding)
-    ScreenPos playerGridToScreen(const GridPos& grid, float padding);
-    ScreenPos playerGridToScreen(int row, int col, float padding);
+    ScreenPos gridToScreen(const BoardMetrics& metrics, const GridPos& grid);
+    ScreenPos gridToScreen(const BoardMetrics& metrics, int row, int col);
+    GridPos screenToGrid(const BoardMetrics& metrics, const ScreenPos& screen);
+    GridPos screenToGrid(const BoardMetrics& metrics, float x, float y);
 }
 
 #endif // COORDS_H

@@ -77,7 +77,7 @@ namespace Overlay
     RectF getLevelClearButtonRect(int windowWidth, int windowHeight)
     {
         float panelW = 440.0f;
-        float panelH = 170.0f;
+        float panelH = 200.0f;
         float panelX = (windowWidth - panelW) / 2.0f;
         float panelY = (windowHeight - panelH) / 2.0f;
         float btnW = 220.0f;
@@ -126,13 +126,16 @@ namespace Overlay
                                const Level& level)
     {
         char title[64];
-        char bonusText[64];
+        char timeText[64];
+        char scoreText[64];
 
         std::snprintf(title, sizeof(title), "%s Complete!", level.getDefinition().name);
-        std::snprintf(bonusText, sizeof(bonusText), "Level Bonus: +%d", gameState.levelClearBonus);
+        std::snprintf(timeText, sizeof(timeText), "Stage Time: %.1fs",
+                      gameState.lastLevelTimeMs / 1000.0f);
+        std::snprintf(scoreText, sizeof(scoreText), "Stage Score: +%d", gameState.lastLevelScore);
 
         float panelW = 440.0f;
-        float panelH = 170.0f;
+        float panelH = 200.0f;
         float panelX = (windowWidth - panelW) / 2.0f;
         float panelY = (windowHeight - panelH) / 2.0f;
 
@@ -140,11 +143,13 @@ namespace Overlay
 
         float titleW = static_cast<float>(TextRenderer::getTextWidth(title));
         TextRenderer::drawTextWithShadow(panelX + (panelW - titleW) / 2.0f,
-                                         panelY + 128.0f, title,
+                                         panelY + 154.0f, title,
                                          Colors::TEXT_GOLD_R, Colors::TEXT_GOLD_G,
                                          Colors::TEXT_GOLD_B);
-        TextRenderer::drawTextWithShadow(panelX + 36.0f, panelY + 90.0f,
-                                         bonusText, 0.70f, 0.95f, 0.74f);
+        TextRenderer::drawTextWithShadow(panelX + 36.0f, panelY + 108.0f,
+                                         timeText, 0.90f, 0.95f, 1.0f);
+        TextRenderer::drawTextWithShadow(panelX + 36.0f, panelY + 78.0f,
+                                         scoreText, 0.70f, 0.95f, 0.74f);
 
         RectF buttonRect = getLevelClearButtonRect(windowWidth, windowHeight);
         const char* nextLabel = (level.getIndex() + 1 < Config::TOTAL_LEVELS)

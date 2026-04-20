@@ -2,22 +2,17 @@
 #define PLAYER_H
 
 #include "../core/types.h"
-#include "../core/config.h"
 
 class Player
 {
 public:
     Player();
 
-    void reset();
+    void reset(const GridPos& startPos);
     void setPosition(const GridPos& grid);
     void setPosition(int row, int col);
 
-    GridPos getGridPos() const;
-    ScreenPos getScreenPos() const { return pos; }
-    float getX() const { return pos.x; }
-    float getY() const { return pos.y; }
-    float getSize() const { return Config::PLAYER_SIZE; }
+    GridPos getGridPos() const { return pos; }
 
     // Movement flags
     bool isMoveUp() const { return moveUp; }
@@ -33,7 +28,7 @@ public:
     void resetMovementFlags();
 
 private:
-    ScreenPos pos;
+    GridPos pos;
     bool moveUp;
     bool moveDown;
     bool moveLeft;

@@ -14,9 +14,9 @@ struct GameStateData
     int menuSelection;
     int lives;
     int score;
-    int levelClearBonus;
+    int lastLevelScore;
+    int lastLevelTimeMs;
     bool scoreSaved;
-    bool hasKey;
     char playerName[Config::MAX_PLAYER_NAME_LENGTH + 1];
     char settingsDraftName[Config::MAX_PLAYER_NAME_LENGTH + 1];
     bool settingsEditingName;

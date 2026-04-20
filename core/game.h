@@ -55,21 +55,38 @@ public:
     const HighScoreManager& getHighScores() const { return highScores; }
 
 private:
+    enum MoveDirection
+    {
+        MOVE_DIRECTION_NONE = -1,
+        MOVE_DIRECTION_UP = 0,
+        MOVE_DIRECTION_DOWN = 1,
+        MOVE_DIRECTION_LEFT = 2,
+        MOVE_DIRECTION_RIGHT = 3
+    };
+
     GameStateData gameState;
     Player player;
     Level level;
     Timer timer;
     HighScoreManager highScores;
+    int movePressSequence;
+    int movePressOrder[4];
+    MoveDirection repeatedMoveDirection;
+    int nextRepeatedMoveMs;
 
     // Game logic
     void tryMoveByTile(int colStep, int rowStep);
-    void handleKeyPickup();
-    void handleTrapHit();
     void handleExitReached();
     void finalizeSessionIfNeeded();
     void openSettings();
     void syncSettingsDraftToPlayerName();
     void syncPlayerNameToSettingsDraft();
+    int computeStageScore(int elapsedMs, int parTimeMs) const;
+    void clearMoveRepeatState();
+    void markMoveDirectionHeld(MoveDirection direction, bool held);
+    MoveDirection getActiveHeldDirection() const;
+    void applyMoveDirection(MoveDirection direction, bool allowImmediateMove);
+    void updateHeldMovement();
 };
 
 #endif // GAME_H

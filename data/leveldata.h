@@ -2,24 +2,32 @@
 #define LEVELDATA_H
 
 #include "../core/config.h"
+#include "../core/types.h"
 
-struct LevelDefinition
+struct LevelSpec
 {
     const char* name;
+    int rows;
+    int cols;
+    GridPos startPos;
+    GridPos exitTarget;
     unsigned int seed;
     int candidateCount;
-    int minSolutionLength;
+    int minCriticalPath;
     int minDeadEnds;
-    int keyProgressPercent;
-    int clearBonus;
-    int trapCount;
-    int obstacleCount;
+    int roomBudget;
+    int roomMinRows;
+    int roomMaxRows;
+    int roomMinCols;
+    int roomMaxCols;
+    int loopBudget;
+    int junctionTarget;
     int parTimeMs;
 };
 
 namespace LevelData
 {
-    extern const LevelDefinition levels[Config::TOTAL_LEVELS];
+    extern const LevelSpec levels[Config::TOTAL_LEVELS];
 }
 
 #endif // LEVELDATA_H

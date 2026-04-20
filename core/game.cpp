@@ -11,8 +11,17 @@
 #include <cstdio>
 #include <ctime>
 
-Game::Game() : cachedWinW(1180), cachedWinH(720)
+Game::Game()
+    : cachedWinW(1180),
+      cachedWinH(720),
+      movePressSequence(0),
+      repeatedMoveDirection(MOVE_DIRECTION_NONE),
+      nextRepeatedMoveMs(0)
 {
+    for (int i = 0; i < 4; i++)
+    {
+        movePressOrder[i] = 0;
+    }
 }
 
 void Game::init()
@@ -60,6 +69,7 @@ void Game::loadSettings()
 void Game::update()
 {
     timer.updateAnimationTime();
+    updateHeldMovement();
 }
 
 void Game::render(int windowWidth, int windowHeight)
@@ -69,6 +79,8 @@ void Game::render(int windowWidth, int windowHeight)
     glClear(GL_COLOR_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+
+    const BoardMetrics& metrics = level.getMetrics();
 
     if (gameState.state == STATE_MAIN_MENU)
     {
@@ -94,36 +106,33 @@ void Game::render(int windowWidth, int windowHeight)
                             Colors::BG_DARK_R, Colors::BG_DARK_G, Colors::BG_DARK_B, 1.0f);
 
     // Draw main game panel
-    HUD::drawPanel(Renderer::getGameCanvasX(windowWidth),
-                  Renderer::getGameCanvasY(windowHeight),
-                  Renderer::getGameCanvasWidth(),
-                  Renderer::getGameCanvasHeight(),
+    HUD::drawPanel(Renderer::getGameCanvasX(windowWidth, metrics),
+                  Renderer::getGameCanvasY(windowHeight, metrics),
+                  Renderer::getGameCanvasWidth(metrics),
+                  Renderer::getGameCanvasHeight(metrics),
                   Colors::ACCENT_BLUE_R, Colors::ACCENT_BLUE_G, Colors::ACCENT_BLUE_B, 0.78f);
 
     // Draw board frame
-    float boardX = Renderer::getBoardOriginX(windowWidth) - Config::BOARD_PADDING;
-    float boardY = Renderer::getBoardOriginY(windowHeight) - Config::BOARD_PADDING;
-    float boardFrameWidth = Config::BOARD_WIDTH + Config::BOARD_PADDING * 2.0f;
-    float boardFrameHeight = Config::BOARD_HEIGHT + Config::BOARD_PADDING * 2.0f;
+    float boardX = Renderer::getBoardOriginX(windowWidth, metrics) - metrics.boardPadding;
+    float boardY = Renderer::getBoardOriginY(windowHeight, metrics) - metrics.boardPadding;
+    float boardFrameWidth = metrics.boardWidth + metrics.boardPadding * 2.0f;
+    float boardFrameHeight = metrics.boardHeight + metrics.boardPadding * 2.0f;
     
     Renderer::drawFilledRect(boardX, boardY, boardFrameWidth, boardFrameHeight,
                             0.01f, 0.02f, 0.04f, 0.86f);
     Renderer::drawRectOutline(boardX, boardY, boardFrameWidth, boardFrameHeight,
-                             Config::BOARD_BORDER_WIDTH,
+                             metrics.boardBorderWidth,
                              Colors::ACCENT_BLUE_R, Colors::ACCENT_BLUE_G,
                              Colors::ACCENT_BLUE_B, 0.26f);
 
     // Draw game elements
     glPushMatrix();
-    glTranslatef(Renderer::getBoardOriginX(windowWidth),
-                Renderer::getBoardOriginY(windowHeight), 0.0f);
-    Renderer::drawFloor();
+    glTranslatef(Renderer::getBoardOriginX(windowWidth, metrics),
+                Renderer::getBoardOriginY(windowHeight, metrics), 0.0f);
+    Renderer::drawFloor(metrics);
     Renderer::drawMaze(level.getMaze());
-    Renderer::drawExit(level.getMaze(), timer.getAnimationTime(), gameState.hasKey);
-    Renderer::drawTraps(level.getMaze(), timer.getAnimationTime());
-    Renderer::drawObstacles(level.getMaze());
-    Renderer::drawKeys(level.getMaze(), timer.getAnimationTime());
-    Renderer::drawPlayer(player);
+    Renderer::drawExit(level.getMaze(), timer.getAnimationTime());
+    Renderer::drawPlayer(player, metrics);
     glPopMatrix();
 
     // Draw HUD
@@ -161,8 +170,9 @@ void Game::startNewRun(int levelIndex)
     gameState.menuSelection = levelIndex;
     gameState.score = 0;
     gameState.lives = Config::MAX_LIVES;
+    gameState.lastLevelScore = 0;
+    gameState.lastLevelTimeMs = 0;
     gameState.scoreSaved = false;
-    gameState.hasKey = false;
     startLevel(levelIndex);
 }
 
@@ -174,13 +184,13 @@ void Game::startLevel(int levelIndex)
     }
 
     gameState.currentLevelIndex = levelIndex;
-    gameState.hasKey = false;
-
     level.load(levelIndex);
-    gameState.levelClearBonus = 0;
+    gameState.lastLevelScore = 0;
+    gameState.lastLevelTimeMs = 0;
     timer.reset();
     timer.start();
-    player.reset();
+    player.reset(level.getMaze().getStartPos());
+    clearMoveRepeatState();
     gameState.state = STATE_PLAYING;
 }
 
@@ -193,9 +203,10 @@ void Game::openSettings()
 
 void Game::returnToMainMenu()
 {
-    player.resetMovementFlags();
+    clearMoveRepeatState();
     timer.reset();
-    gameState.levelClearBonus = 0;
+    gameState.lastLevelScore = 0;
+    gameState.lastLevelTimeMs = 0;
     gameState.settingsEditingName = false;
     syncPlayerNameToSettingsDraft();
     gameState.titleStep = TITLE_STEP_WELCOME;
@@ -207,6 +218,7 @@ void Game::pauseGame()
 {
     if (gameState.state == STATE_PLAYING)
     {
+        clearMoveRepeatState();
         gameState.state = STATE_PAUSED;
         timer.stop();
     }
@@ -238,72 +250,203 @@ void Game::tryMoveByTile(int colStep, int rowStep)
 
     player.setPosition(targetPos);
 
-    // Check for key pickup
-    if (Collision::isAtKey(level.getMaze(), player))
-    {
-        handleKeyPickup();
-    }
-    // Check for trap
-    else if (Collision::isAtTrap(level.getMaze(), player))
-    {
-        handleTrapHit();
-    }
-    // Check for exit
-    else if (Collision::isAtExit(level.getMaze(), player, gameState.hasKey))
+    if (Collision::isAtExit(level.getMaze(), player))
     {
         handleExitReached();
     }
 }
 
-void Game::handleKeyPickup()
+int Game::computeStageScore(int elapsedMs, int parTimeMs) const
 {
-    gameState.hasKey = true;
-    gameState.score += Config::KEY_BONUS;
-    
-    // Remove key from maze
-    GridPos playerPos = player.getGridPos();
-    level.getMaze().removeTile(playerPos.row, playerPos.col);
+    int timeWindowMs = parTimeMs * Config::TIME_SCORE_WINDOW_MULTIPLIER;
+    int scoreValue = timeWindowMs - elapsedMs;
+
+    if (scoreValue < 0)
+    {
+        scoreValue = 0;
+    }
+
+    return scoreValue / Config::TIME_SCORE_DIVISOR_MS;
 }
 
-void Game::handleTrapHit()
+void Game::clearMoveRepeatState()
 {
-    if (gameState.score >= Config::TRAP_PENALTY)
+    movePressSequence = 0;
+    repeatedMoveDirection = MOVE_DIRECTION_NONE;
+    nextRepeatedMoveMs = 0;
+
+    for (int i = 0; i < 4; i++)
     {
-        gameState.score -= Config::TRAP_PENALTY;
-    }
-    else
-    {
-        gameState.score = 0;
+        movePressOrder[i] = 0;
     }
 
-    gameState.lives--;
+    player.resetMovementFlags();
+}
 
-    if (gameState.lives <= 0)
+void Game::markMoveDirectionHeld(MoveDirection direction, bool held)
+{
+    if (direction == MOVE_DIRECTION_NONE)
     {
-        gameState.lives = 0;
-        gameState.state = STATE_GAME_OVER;
-        player.resetMovementFlags();
-        finalizeSessionIfNeeded();
         return;
     }
 
-    player.reset();
+    bool wasHeld = false;
+    switch (direction)
+    {
+    case MOVE_DIRECTION_UP:
+        wasHeld = player.isMoveUp();
+        player.setMoveUp(held);
+        break;
+    case MOVE_DIRECTION_DOWN:
+        wasHeld = player.isMoveDown();
+        player.setMoveDown(held);
+        break;
+    case MOVE_DIRECTION_LEFT:
+        wasHeld = player.isMoveLeft();
+        player.setMoveLeft(held);
+        break;
+    case MOVE_DIRECTION_RIGHT:
+        wasHeld = player.isMoveRight();
+        player.setMoveRight(held);
+        break;
+    default:
+        return;
+    }
+
+    if (held)
+    {
+        if (!wasHeld)
+        {
+            movePressOrder[direction] = ++movePressSequence;
+        }
+    }
+    else
+    {
+        movePressOrder[direction] = 0;
+    }
+}
+
+Game::MoveDirection Game::getActiveHeldDirection() const
+{
+    MoveDirection bestDirection = MOVE_DIRECTION_NONE;
+    int bestOrder = -1;
+
+    if (player.isMoveUp() && movePressOrder[MOVE_DIRECTION_UP] > bestOrder)
+    {
+        bestDirection = MOVE_DIRECTION_UP;
+        bestOrder = movePressOrder[MOVE_DIRECTION_UP];
+    }
+    if (player.isMoveDown() && movePressOrder[MOVE_DIRECTION_DOWN] > bestOrder)
+    {
+        bestDirection = MOVE_DIRECTION_DOWN;
+        bestOrder = movePressOrder[MOVE_DIRECTION_DOWN];
+    }
+    if (player.isMoveLeft() && movePressOrder[MOVE_DIRECTION_LEFT] > bestOrder)
+    {
+        bestDirection = MOVE_DIRECTION_LEFT;
+        bestOrder = movePressOrder[MOVE_DIRECTION_LEFT];
+    }
+    if (player.isMoveRight() && movePressOrder[MOVE_DIRECTION_RIGHT] > bestOrder)
+    {
+        bestDirection = MOVE_DIRECTION_RIGHT;
+    }
+
+    return bestDirection;
+}
+
+void Game::applyMoveDirection(MoveDirection direction, bool isInitialMove)
+{
+    if (!gameState.isPlaying())
+    {
+        clearMoveRepeatState();
+        return;
+    }
+
+    if (direction == MOVE_DIRECTION_NONE)
+    {
+        repeatedMoveDirection = MOVE_DIRECTION_NONE;
+        nextRepeatedMoveMs = 0;
+        return;
+    }
+
+    if (direction == MOVE_DIRECTION_UP)
+    {
+        tryMoveByTile(0, -1);
+    }
+    else if (direction == MOVE_DIRECTION_DOWN)
+    {
+        tryMoveByTile(0, 1);
+    }
+    else if (direction == MOVE_DIRECTION_LEFT)
+    {
+        tryMoveByTile(-1, 0);
+    }
+    else if (direction == MOVE_DIRECTION_RIGHT)
+    {
+        tryMoveByTile(1, 0);
+    }
+
+    if (!gameState.isPlaying())
+    {
+        clearMoveRepeatState();
+        return;
+    }
+
+    repeatedMoveDirection = getActiveHeldDirection();
+    if (repeatedMoveDirection == MOVE_DIRECTION_NONE)
+    {
+        nextRepeatedMoveMs = 0;
+        return;
+    }
+
+    nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + (isInitialMove
+        ? Config::HOLD_MOVE_INITIAL_DELAY_MS
+        : Config::HOLD_MOVE_REPEAT_INTERVAL_MS);
+}
+
+void Game::updateHeldMovement()
+{
+    if (!gameState.isPlaying())
+    {
+        return;
+    }
+
+    MoveDirection activeDirection = getActiveHeldDirection();
+    if (activeDirection == MOVE_DIRECTION_NONE)
+    {
+        repeatedMoveDirection = MOVE_DIRECTION_NONE;
+        nextRepeatedMoveMs = 0;
+        return;
+    }
+
+    int now = glutGet(GLUT_ELAPSED_TIME);
+    if (repeatedMoveDirection != activeDirection)
+    {
+        repeatedMoveDirection = activeDirection;
+        nextRepeatedMoveMs = now + Config::HOLD_MOVE_INITIAL_DELAY_MS;
+        return;
+    }
+
+    if (nextRepeatedMoveMs == 0)
+    {
+        nextRepeatedMoveMs = now + Config::HOLD_MOVE_INITIAL_DELAY_MS;
+        return;
+    }
+
+    if (now >= nextRepeatedMoveMs)
+    {
+        applyMoveDirection(activeDirection, false);
+    }
 }
 
 void Game::handleExitReached()
 {
-    const LevelDefinition& definition = level.getDefinition();
-    int timeBonus = definition.parTimeMs - timer.getElapsedMs();
-    int lifeBonus = gameState.lives * 175;
-
-    if (timeBonus < 0)
-    {
-        timeBonus = 0;
-    }
-
-    gameState.levelClearBonus = definition.clearBonus + (timeBonus / 25) + lifeBonus;
-    gameState.score += gameState.levelClearBonus;
-    player.resetMovementFlags();
+    const LevelSpec& definition = level.getDefinition();
+    timer.stop();
+    gameState.lastLevelTimeMs = timer.getElapsedMs();
+    gameState.lastLevelScore = computeStageScore(gameState.lastLevelTimeMs, definition.parTimeMs);
+    gameState.score += gameState.lastLevelScore;
+    clearMoveRepeatState();
 
     if (gameState.currentLevelIndex == Config::TOTAL_LEVELS - 1)
     {
@@ -577,26 +720,37 @@ void Game::handleKeyDown(unsigned char key)
         return;
     }
 
-    // Movement keys
-    if ((key == 'w' || key == 'W') && !player.isMoveUp())
+    if (key == 'w' || key == 'W')
     {
-        player.setMoveUp(true);
-        tryMoveByTile(0, -1);
+        if (!player.isMoveUp())
+        {
+            markMoveDirectionHeld(MOVE_DIRECTION_UP, true);
+            applyMoveDirection(MOVE_DIRECTION_UP, true);
+        }
     }
-    else if ((key == 's' || key == 'S') && !player.isMoveDown())
+    else if (key == 's' || key == 'S')
     {
-        player.setMoveDown(true);
-        tryMoveByTile(0, 1);
+        if (!player.isMoveDown())
+        {
+            markMoveDirectionHeld(MOVE_DIRECTION_DOWN, true);
+            applyMoveDirection(MOVE_DIRECTION_DOWN, true);
+        }
     }
-    else if ((key == 'a' || key == 'A') && !player.isMoveLeft())
+    else if (key == 'a' || key == 'A')
     {
-        player.setMoveLeft(true);
-        tryMoveByTile(-1, 0);
+        if (!player.isMoveLeft())
+        {
+            markMoveDirectionHeld(MOVE_DIRECTION_LEFT, true);
+            applyMoveDirection(MOVE_DIRECTION_LEFT, true);
+        }
     }
-    else if ((key == 'd' || key == 'D') && !player.isMoveRight())
+    else if (key == 'd' || key == 'D')
     {
-        player.setMoveRight(true);
-        tryMoveByTile(1, 0);
+        if (!player.isMoveRight())
+        {
+            markMoveDirectionHeld(MOVE_DIRECTION_RIGHT, true);
+            applyMoveDirection(MOVE_DIRECTION_RIGHT, true);
+        }
     }
 }
 
@@ -604,19 +758,30 @@ void Game::handleKeyUp(unsigned char key)
 {
     if (key == 'w' || key == 'W')
     {
-        player.setMoveUp(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_UP, false);
     }
     else if (key == 's' || key == 'S')
     {
-        player.setMoveDown(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_DOWN, false);
     }
     else if (key == 'a' || key == 'A')
     {
-        player.setMoveLeft(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_LEFT, false);
     }
     else if (key == 'd' || key == 'D')
     {
-        player.setMoveRight(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_RIGHT, false);
+    }
+
+    MoveDirection activeDirection = getActiveHeldDirection();
+    repeatedMoveDirection = activeDirection;
+    if (activeDirection == MOVE_DIRECTION_NONE)
+    {
+        nextRepeatedMoveMs = 0;
+    }
+    else
+    {
+        nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + Config::HOLD_MOVE_INITIAL_DELAY_MS;
     }
 }
 
@@ -643,23 +808,23 @@ void Game::handleSpecialDown(int key)
 
     if (key == GLUT_KEY_UP && !player.isMoveUp())
     {
-        player.setMoveUp(true);
-        tryMoveByTile(0, -1);
+        markMoveDirectionHeld(MOVE_DIRECTION_UP, true);
+        applyMoveDirection(MOVE_DIRECTION_UP, true);
     }
     else if (key == GLUT_KEY_DOWN && !player.isMoveDown())
     {
-        player.setMoveDown(true);
-        tryMoveByTile(0, 1);
+        markMoveDirectionHeld(MOVE_DIRECTION_DOWN, true);
+        applyMoveDirection(MOVE_DIRECTION_DOWN, true);
     }
     else if (key == GLUT_KEY_LEFT && !player.isMoveLeft())
     {
-        player.setMoveLeft(true);
-        tryMoveByTile(-1, 0);
+        markMoveDirectionHeld(MOVE_DIRECTION_LEFT, true);
+        applyMoveDirection(MOVE_DIRECTION_LEFT, true);
     }
     else if (key == GLUT_KEY_RIGHT && !player.isMoveRight())
     {
-        player.setMoveRight(true);
-        tryMoveByTile(1, 0);
+        markMoveDirectionHeld(MOVE_DIRECTION_RIGHT, true);
+        applyMoveDirection(MOVE_DIRECTION_RIGHT, true);
     }
 }
 
@@ -667,19 +832,30 @@ void Game::handleSpecialUp(int key)
 {
     if (key == GLUT_KEY_UP)
     {
-        player.setMoveUp(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_UP, false);
     }
     else if (key == GLUT_KEY_DOWN)
     {
-        player.setMoveDown(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_DOWN, false);
     }
     else if (key == GLUT_KEY_LEFT)
     {
-        player.setMoveLeft(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_LEFT, false);
     }
     else if (key == GLUT_KEY_RIGHT)
     {
-        player.setMoveRight(false);
+        markMoveDirectionHeld(MOVE_DIRECTION_RIGHT, false);
+    }
+
+    MoveDirection activeDirection = getActiveHeldDirection();
+    repeatedMoveDirection = activeDirection;
+    if (activeDirection == MOVE_DIRECTION_NONE)
+    {
+        nextRepeatedMoveMs = 0;
+    }
+    else
+    {
+        nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + Config::HOLD_MOVE_INITIAL_DELAY_MS;
     }
 }
 
