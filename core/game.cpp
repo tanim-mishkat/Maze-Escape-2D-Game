@@ -1,4 +1,5 @@
 #include "game.h"
+#include "input.h"
 #include "../gameplay/collision.h"
 #include "../render/renderer.h"
 #include "../render/colors.h"
@@ -6,67 +7,63 @@
 #include "../ui/menu.h"
 #include "../ui/overlay.h"
 #include <GL/freeglut.h>
+#include <fstream>
 #include <cstring>
 #include <cstdlib>
-#include <cstdio>
+#include <ctime>
+#include <random>
 #include <ctime>
 
 Game::Game()
     : cachedWinW(1180),
       cachedWinH(720),
-      movePressSequence(0),
-      repeatedMoveDirection(MOVE_DIRECTION_NONE),
-      nextRepeatedMoveMs(0)
+      inputState() // InputManager::State is initialized with default constructor
 {
-    for (int i = 0; i < 4; i++)
-    {
-        movePressOrder[i] = 0;
-    }
+}
+
+Game::~Game()
+{
+    // Destructor will be called when game goes out of scope
+    // GLUT-owned resources (bitmap fonts) are cleaned up by GLUT
+}
+
+void Game::shutdown()
+{
+    // Explicit cleanup - called before program exit
+    // Save any state that needs persistence
+    settings.save();
+    highScores.save();
+
+    // Note: OpenGL resources (fonts, etc.) are owned by GLUT/system
+    // and will be cleaned up automatically on program termination
 }
 
 void Game::init()
 {
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
-    loadSettings();
+    // Initialize random number generator using Mersenne Twister
+    // (Used by maze generation)
+    std::random_device rd;
+    srand(rd());
+
+    // Load settings from persistent storage
+    settings.load();
+    std::strncpy(gameState.playerName, settings.getPlayerName(),
+                 Config::MAX_PLAYER_NAME_LENGTH);
+    gameState.playerName[Config::MAX_PLAYER_NAME_LENGTH] = '\0';
+
     highScores.load();
     returnToMainMenu();
 }
 
-void Game::saveSettings()
+void Game::beginNameEdit()
 {
-    FILE* f = std::fopen(Config::SETTINGS_FILE, "w");
-    if (!f) return;
-    std::fprintf(f, "NAME=%s\n", gameState.playerName);
-    std::fclose(f);
+    // Initialize draft name from current settings
+    settings.resetDraftName();
+    std::strncpy(gameState.settingsDraftName, settings.getDraftName(),
+                 Config::MAX_PLAYER_NAME_LENGTH);
+    gameState.settingsDraftName[Config::MAX_PLAYER_NAME_LENGTH] = '\0';
+    gameState.settingsEditingName = true;
 }
-
-void Game::loadSettings()
-{
-    FILE* f = std::fopen(Config::SETTINGS_FILE, "r");
-    if (!f)
-    {
-        ensurePlayerName();
-        syncPlayerNameToSettingsDraft();
-        return;
-    }
-    char line[64];
-    while (std::fgets(line, sizeof(line), f))
-    {
-        // strip trailing newline
-        char* nl = std::strchr(line, '\n');
-        if (nl) *nl = '\0';
-        char* cr = std::strchr(line, '\r');
-        if (cr) *cr = '\0';
-
-        if (std::strncmp(line, "NAME=", 5) == 0 && line[5] != '\0')
-            std::snprintf(gameState.playerName, sizeof(gameState.playerName), "%s", line + 5);
-    }
-    std::fclose(f);
-    ensurePlayerName();
-    syncPlayerNameToSettingsDraft();
-}
-
-void Game::update()
 {
     timer.updateAnimationTime();
     updateHeldMovement();
@@ -80,7 +77,7 @@ void Game::render(int windowWidth, int windowHeight)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    const BoardMetrics& metrics = level.getMetrics();
+    const BoardMetrics &metrics = level.getMetrics();
 
     if (gameState.state == STATE_MAIN_MENU)
     {
@@ -102,33 +99,33 @@ void Game::render(int windowWidth, int windowHeight)
 
     // Draw game background
     Renderer::drawFilledRect(0.0f, 0.0f, static_cast<float>(windowWidth),
-                            static_cast<float>(windowHeight),
-                            Colors::BG_DARK_R, Colors::BG_DARK_G, Colors::BG_DARK_B, 1.0f);
+                             static_cast<float>(windowHeight),
+                             Colors::BG_DARK_R, Colors::BG_DARK_G, Colors::BG_DARK_B, 1.0f);
 
     // Draw main game panel
     HUD::drawPanel(Renderer::getGameCanvasX(windowWidth, metrics),
-                  Renderer::getGameCanvasY(windowHeight, metrics),
-                  Renderer::getGameCanvasWidth(metrics),
-                  Renderer::getGameCanvasHeight(metrics),
-                  Colors::ACCENT_BLUE_R, Colors::ACCENT_BLUE_G, Colors::ACCENT_BLUE_B, 0.78f);
+                   Renderer::getGameCanvasY(windowHeight, metrics),
+                   Renderer::getGameCanvasWidth(metrics),
+                   Renderer::getGameCanvasHeight(metrics),
+                   Colors::ACCENT_BLUE_R, Colors::ACCENT_BLUE_G, Colors::ACCENT_BLUE_B, 0.78f);
 
     // Draw board frame
     float boardX = Renderer::getBoardOriginX(windowWidth, metrics) - metrics.boardPadding;
     float boardY = Renderer::getBoardOriginY(windowHeight, metrics) - metrics.boardPadding;
     float boardFrameWidth = metrics.boardWidth + metrics.boardPadding * 2.0f;
     float boardFrameHeight = metrics.boardHeight + metrics.boardPadding * 2.0f;
-    
+
     Renderer::drawFilledRect(boardX, boardY, boardFrameWidth, boardFrameHeight,
-                            0.01f, 0.02f, 0.04f, 0.86f);
+                             0.01f, 0.02f, 0.04f, 0.86f);
     Renderer::drawRectOutline(boardX, boardY, boardFrameWidth, boardFrameHeight,
-                             metrics.boardBorderWidth,
-                             Colors::ACCENT_BLUE_R, Colors::ACCENT_BLUE_G,
-                             Colors::ACCENT_BLUE_B, 0.26f);
+                              metrics.boardBorderWidth,
+                              Colors::ACCENT_BLUE_R, Colors::ACCENT_BLUE_G,
+                              Colors::ACCENT_BLUE_B, 0.26f);
 
     // Draw game elements
     glPushMatrix();
     glTranslatef(Renderer::getBoardOriginX(windowWidth, metrics),
-                Renderer::getBoardOriginY(windowHeight, metrics), 0.0f);
+                 Renderer::getBoardOriginY(windowHeight, metrics), 0.0f);
     Renderer::drawFloor(metrics);
     Renderer::drawMaze(level.getMaze());
     Renderer::drawExit(level.getMaze(), timer.getAnimationTime());
@@ -150,9 +147,9 @@ void Game::render(int windowWidth, int windowHeight)
     else if (gameState.state == STATE_CAMPAIGN_WON)
     {
         Overlay::drawEndOverlay(windowWidth, windowHeight,
-                               "Victory!",
-                               "You completed all levels!",
-                               gameState, highScores);
+                                "Victory!",
+                                "You completed all levels!",
+                                gameState, highScores);
     }
 }
 
@@ -170,18 +167,27 @@ void Game::startNewRun(int levelIndex)
 
 void Game::startLevel(int levelIndex)
 {
+    // Validate level index - clamp to valid range
     if (levelIndex < 0 || levelIndex >= Config::TOTAL_LEVELS)
     {
         levelIndex = 0;
     }
 
     gameState.currentLevelIndex = levelIndex;
+
+    // Load level (which internally clamps index again, but we've already validated)
     level.load(levelIndex);
+
+    // Reset level state
     gameState.lastLevelScore = 0;
     gameState.lastLevelTimeMs = 0;
     timer.reset();
     timer.start();
-    player.reset(level.getMaze().getStartPos());
+
+    // Reset player at maze start position
+    GridPos startPos = level.getMaze().getStartPos();
+    player.reset(startPos);
+
     clearMoveRepeatState();
     gameState.state = STATE_PLAYING;
 }
@@ -262,21 +268,47 @@ int Game::computeStageScore(int elapsedMs, int parTimeMs) const
 
 void Game::clearMoveRepeatState()
 {
-    movePressSequence = 0;
-    repeatedMoveDirection = MOVE_DIRECTION_NONE;
-    nextRepeatedMoveMs = 0;
-
-    for (int i = 0; i < 4; i++)
-    {
-        movePressOrder[i] = 0;
-    }
+    inputState.reset();
 
     player.resetMovementFlags();
 }
 
+// ============================================================================
+// INPUT STATE MACHINE: "Most Recently Pressed Key Wins"
+// ============================================================================
+//
+// Movement input is handled using a priority system that gives preference
+// to the most recently pressed direction key. This provides intuitive
+// keyboard handling where overlapping key presses don't cause ambiguity.
+//
+// ALGORITHM:
+//   1. Track which keys are currently held: movePressOrder[4]
+//      - movePressOrder[UP/DOWN/LEFT/RIGHT] = press sequence counter
+//      - Value 0 means not held; higher values = more recent press
+//   2. When a key is pressed:
+//      - Increment global movePressSequence counter
+//      - Store current sequence number in movePressOrder[direction]
+//   3. When a key is released:
+//      - Set movePressOrder[direction] = 0
+//   4. To find active direction:
+//      - Among all held directions, pick the one with highest sequence number
+//      - This is the most recently pressed key
+//   5. Apply movement with repeat:
+//      - Initial press: move immediately, set repeat timer (Config::HOLD_MOVE_INITIAL_DELAY_MS)
+//      - Held key: repeat movement at interval (Config::HOLD_MOVE_REPEAT_INTERVAL_MS)
+//      - Change direction: reset timer to initial delay
+//
+// EXAMPLE:
+//   User presses: UP → RIGHT (while UP held) → move UP initially
+//   → system detects RIGHT more recent, switches to move RIGHT
+//   → user releases UP → continue moving RIGHT
+//   → user presses UP (while RIGHT held) → switch to move UP
+//
+// ============================================================================
+
 void Game::markMoveDirectionHeld(MoveDirection direction, bool held)
 {
-    if (direction == MOVE_DIRECTION_NONE)
+    if (direction == InputManager::MOVE_DIRECTION_NONE)
     {
         return;
     }
@@ -284,19 +316,19 @@ void Game::markMoveDirectionHeld(MoveDirection direction, bool held)
     bool wasHeld = false;
     switch (direction)
     {
-    case MOVE_DIRECTION_UP:
+    case InputManager::MOVE_DIRECTION_UP:
         wasHeld = player.isMoveUp();
         player.setMoveUp(held);
         break;
-    case MOVE_DIRECTION_DOWN:
+    case InputManager::MOVE_DIRECTION_DOWN:
         wasHeld = player.isMoveDown();
         player.setMoveDown(held);
         break;
-    case MOVE_DIRECTION_LEFT:
+    case InputManager::MOVE_DIRECTION_LEFT:
         wasHeld = player.isMoveLeft();
         player.setMoveLeft(held);
         break;
-    case MOVE_DIRECTION_RIGHT:
+    case InputManager::MOVE_DIRECTION_RIGHT:
         wasHeld = player.isMoveRight();
         player.setMoveRight(held);
         break;
@@ -308,38 +340,38 @@ void Game::markMoveDirectionHeld(MoveDirection direction, bool held)
     {
         if (!wasHeld)
         {
-            movePressOrder[direction] = ++movePressSequence;
+            inputState.movePressOrder[direction] = ++inputState.movePressSequence;
         }
     }
     else
     {
-        movePressOrder[direction] = 0;
+        inputState.movePressOrder[direction] = 0;
     }
 }
 
-Game::MoveDirection Game::getActiveHeldDirection() const
+MoveDirection Game::getActiveHeldDirection() const
 {
-    MoveDirection bestDirection = MOVE_DIRECTION_NONE;
+    MoveDirection bestDirection = InputManager::MOVE_DIRECTION_NONE;
     int bestOrder = -1;
 
-    if (player.isMoveUp() && movePressOrder[MOVE_DIRECTION_UP] > bestOrder)
+    if (player.isMoveUp() && inputState.movePressOrder[InputManager::MOVE_DIRECTION_UP] > bestOrder)
     {
-        bestDirection = MOVE_DIRECTION_UP;
-        bestOrder = movePressOrder[MOVE_DIRECTION_UP];
+        bestDirection = InputManager::MOVE_DIRECTION_UP;
+        bestOrder = inputState.movePressOrder[InputManager::MOVE_DIRECTION_UP];
     }
-    if (player.isMoveDown() && movePressOrder[MOVE_DIRECTION_DOWN] > bestOrder)
+    if (player.isMoveDown() && inputState.movePressOrder[InputManager::MOVE_DIRECTION_DOWN] > bestOrder)
     {
-        bestDirection = MOVE_DIRECTION_DOWN;
-        bestOrder = movePressOrder[MOVE_DIRECTION_DOWN];
+        bestDirection = InputManager::MOVE_DIRECTION_DOWN;
+        bestOrder = inputState.movePressOrder[InputManager::MOVE_DIRECTION_DOWN];
     }
-    if (player.isMoveLeft() && movePressOrder[MOVE_DIRECTION_LEFT] > bestOrder)
+    if (player.isMoveLeft() && inputState.movePressOrder[InputManager::MOVE_DIRECTION_LEFT] > bestOrder)
     {
-        bestDirection = MOVE_DIRECTION_LEFT;
-        bestOrder = movePressOrder[MOVE_DIRECTION_LEFT];
+        bestDirection = InputManager::MOVE_DIRECTION_LEFT;
+        bestOrder = inputState.movePressOrder[InputManager::MOVE_DIRECTION_LEFT];
     }
-    if (player.isMoveRight() && movePressOrder[MOVE_DIRECTION_RIGHT] > bestOrder)
+    if (player.isMoveRight() && inputState.movePressOrder[InputManager::MOVE_DIRECTION_RIGHT] > bestOrder)
     {
-        bestDirection = MOVE_DIRECTION_RIGHT;
+        bestDirection = InputManager::MOVE_DIRECTION_RIGHT;
     }
 
     return bestDirection;
@@ -353,26 +385,26 @@ void Game::applyMoveDirection(MoveDirection direction, bool isInitialMove)
         return;
     }
 
-    if (direction == MOVE_DIRECTION_NONE)
+    if (direction == InputManager::MOVE_DIRECTION_NONE)
     {
-        repeatedMoveDirection = MOVE_DIRECTION_NONE;
-        nextRepeatedMoveMs = 0;
+        inputState.repeatedMoveDirection = InputManager::MOVE_DIRECTION_NONE;
+        inputState.nextRepeatedMoveMs = 0;
         return;
     }
 
-    if (direction == MOVE_DIRECTION_UP)
+    if (direction == InputManager::MOVE_DIRECTION_UP)
     {
         tryMoveByTile(0, -1);
     }
-    else if (direction == MOVE_DIRECTION_DOWN)
+    else if (direction == InputManager::MOVE_DIRECTION_DOWN)
     {
         tryMoveByTile(0, 1);
     }
-    else if (direction == MOVE_DIRECTION_LEFT)
+    else if (direction == InputManager::MOVE_DIRECTION_LEFT)
     {
         tryMoveByTile(-1, 0);
     }
-    else if (direction == MOVE_DIRECTION_RIGHT)
+    else if (direction == InputManager::MOVE_DIRECTION_RIGHT)
     {
         tryMoveByTile(1, 0);
     }
@@ -384,15 +416,13 @@ void Game::applyMoveDirection(MoveDirection direction, bool isInitialMove)
     }
 
     repeatedMoveDirection = getActiveHeldDirection();
-    if (repeatedMoveDirection == MOVE_DIRECTION_NONE)
+    if (repeatedMoveDirection == InputManager::MOVE_DIRECTION_NONE)
     {
         nextRepeatedMoveMs = 0;
         return;
     }
 
-    nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + (isInitialMove
-        ? Config::HOLD_MOVE_INITIAL_DELAY_MS
-        : Config::HOLD_MOVE_REPEAT_INTERVAL_MS);
+    nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + InputManager::getRepeatDelayMs(isInitialMove);
 }
 
 void Game::updateHeldMovement()
@@ -403,28 +433,28 @@ void Game::updateHeldMovement()
     }
 
     MoveDirection activeDirection = getActiveHeldDirection();
-    if (activeDirection == MOVE_DIRECTION_NONE)
+    if (activeDirection == InputManager::MOVE_DIRECTION_NONE)
     {
-        repeatedMoveDirection = MOVE_DIRECTION_NONE;
-        nextRepeatedMoveMs = 0;
+        inputState.repeatedMoveDirection = InputManager::MOVE_DIRECTION_NONE;
+        inputState.nextRepeatedMoveMs = 0;
         return;
     }
 
     int now = glutGet(GLUT_ELAPSED_TIME);
-    if (repeatedMoveDirection != activeDirection)
+    if (inputState.repeatedMoveDirection != activeDirection)
     {
-        repeatedMoveDirection = activeDirection;
-        nextRepeatedMoveMs = now + Config::HOLD_MOVE_INITIAL_DELAY_MS;
+        inputState.repeatedMoveDirection = activeDirection;
+        inputState.nextRepeatedMoveMs = now + Config::HOLD_MOVE_INITIAL_DELAY_MS;
         return;
     }
 
-    if (nextRepeatedMoveMs == 0)
+    if (inputState.nextRepeatedMoveMs == 0)
     {
-        nextRepeatedMoveMs = now + Config::HOLD_MOVE_INITIAL_DELAY_MS;
+        inputState.nextRepeatedMoveMs = now + Config::HOLD_MOVE_INITIAL_DELAY_MS;
         return;
     }
 
-    if (now >= nextRepeatedMoveMs)
+    if (now >= inputState.nextRepeatedMoveMs)
     {
         applyMoveDirection(activeDirection, false);
     }
@@ -432,7 +462,7 @@ void Game::updateHeldMovement()
 
 void Game::handleExitReached()
 {
-    const LevelSpec& definition = level.getDefinition();
+    const LevelSpec &definition = level.getDefinition();
     timer.stop();
     gameState.lastLevelTimeMs = timer.getElapsedMs();
     gameState.lastLevelScore = computeStageScore(gameState.lastLevelTimeMs, definition.parTimeMs);
@@ -462,41 +492,36 @@ void Game::finalizeSessionIfNeeded()
     gameState.scoreSaved = true;
 }
 
-void Game::syncSettingsDraftToPlayerName()
-{
-    std::snprintf(gameState.playerName, sizeof(gameState.playerName), "%s", gameState.settingsDraftName);
-}
-
-void Game::syncPlayerNameToSettingsDraft()
-{
-    std::snprintf(gameState.settingsDraftName, sizeof(gameState.settingsDraftName), "%s", gameState.playerName);
-}
-
-void Game::beginNameEdit()
-{
-    syncPlayerNameToSettingsDraft();
-    gameState.settingsEditingName = true;
-}
-
 void Game::saveNameEdit()
 {
-    syncSettingsDraftToPlayerName();
-    ensurePlayerName();
-    syncPlayerNameToSettingsDraft();
-    saveSettings();
+    // Update settings with edited name
+    settings.setDraftName(gameState.settingsDraftName);
+    settings.confirmDraftName(); // This copies draft to playerName and saves
+
+    // Sync back to gameState
+    std::strncpy(gameState.playerName, settings.getPlayerName(),
+                 Config::MAX_PLAYER_NAME_LENGTH);
+    gameState.playerName[Config::MAX_PLAYER_NAME_LENGTH] = '\0';
     gameState.settingsEditingName = false;
 }
 
 void Game::cancelNameEdit()
 {
-    syncPlayerNameToSettingsDraft();
+    // Reload draft from current player name
+    settings.resetDraftName();
+    std::strncpy(gameState.settingsDraftName, settings.getDraftName(),
+                 Config::MAX_PLAYER_NAME_LENGTH);
+    gameState.settingsDraftName[Config::MAX_PLAYER_NAME_LENGTH] = '\0';
     gameState.settingsEditingName = false;
 }
 
 void Game::appendPlayerNameCharacter(unsigned char key)
 {
+    // Get current length of draft name in gameState
     std::size_t length = std::strlen(gameState.settingsDraftName);
 
+    // Validate: printable char, not pipe (used as separator), not space at start, and room in buffer
+    // Ensure length + 1 (new char) + 1 (null terminator) fits in buffer
     if (key < 32 || key > 126 || key == '|' || length >= Config::MAX_PLAYER_NAME_LENGTH)
     {
         return;
@@ -504,11 +529,15 @@ void Game::appendPlayerNameCharacter(unsigned char key)
 
     if (key == ' ' && length == 0)
     {
-        return;
+        return; // Don't start name with space
     }
 
+    // Safe to append: we know length < MAX_PLAYER_NAME_LENGTH
     gameState.settingsDraftName[length] = static_cast<char>(key);
-    gameState.settingsDraftName[length + 1] = '\0';
+    gameState.settingsDraftName[length + 1] = '\0'; // Always null-terminate
+
+    // Also update settings draft name to keep them in sync
+    settings.setDraftName(gameState.settingsDraftName);
 }
 
 void Game::removeLastPlayerNameCharacter()
@@ -518,7 +547,15 @@ void Game::removeLastPlayerNameCharacter()
     if (length > 0)
     {
         gameState.settingsDraftName[length - 1] = '\0';
+        // Also update settings draft name to keep them in sync
+        settings.setDraftName(gameState.settingsDraftName);
     }
+}
+
+void Game::syncPlayerNameToSettingsDraft()
+{
+    std::snprintf(gameState.settingsDraftName, sizeof(gameState.settingsDraftName), "%s", gameState.playerName);
+    settings.setDraftName(gameState.settingsDraftName);
 }
 
 void Game::ensurePlayerName()
@@ -674,7 +711,7 @@ void Game::handleKeyDown(unsigned char key)
         }
         return;
     }
-    
+
     if (key == 'r' || key == 'R')
     {
         if (gameState.state == STATE_PLAYING || gameState.state == STATE_CAMPAIGN_WON)
@@ -698,7 +735,7 @@ void Game::handleKeyDown(unsigned char key)
         returnToMainMenu();
         return;
     }
-    
+
     if ((key == 'n' || key == 'N' || key == 13) && gameState.state == STATE_LEVEL_CLEARED)
     {
         startLevel(gameState.currentLevelIndex + 1);

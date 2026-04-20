@@ -5,15 +5,49 @@
 #include <queue>
 #include <random>
 
-void MazeGenerator::generate(Maze& maze,
-                             const LevelSpec& definition,
-                             GridPos& outExitPos,
-                             std::vector<GridPos>& outPath) const
+// ============================================================================
+// MAZE GENERATION ALGORITHM
+// ============================================================================
+//
+// The maze generation process follows these steps:
+//
+// 1. GENERATION PHASE: Create multiple maze candidate layouts
+//    - Uses depth-first search (DFS) to carve perfect mazes (no loops, single path)
+//    - Each candidate is uniquely seeded for deterministic variation
+//    - Candidates are evaluated for path length, turns, dead ends, and routing difficulty
+//
+// 2. EVALUATION PHASE: Analyze and score each candidate
+//    - Compute critical path (shortest route from start to exit)
+//    - Count turns, dead ends, junctions (decision points)
+//    - Measure branch depths and secondary branching
+//    - Calculate route detour (how much longer than critical path)
+//    - Score each candidate using weighted combination of metrics (see Config constants)
+//
+// 3. SELECTION PHASE: Choose the best qualified candidate
+//    - Prioritize candidates meeting difficulty specifications
+//    - Break ties using total score
+//    - Score weights in Config:: control difficulty tuning:
+//      * SCORE_*_WEIGHT constants determine metric importance
+//      * Adjust these constants in core/config.h to tune difficulty progression
+//
+// 4. ENHANCEMENT PHASE: Optionally improve chosen layout
+//    - Add strategic rooms (carved open areas)
+//    - Add optional loops (shortcuts that don't create trivial solutions)
+//    - Add decision junctions to increase complexity
+//    - Final layout maintains solvability while increasing difficulty
+//
+// ============================================================================
+
+void MazeGenerator::generate(Maze &maze,
+                             const LevelSpec &definition,
+                             GridPos &outExitPos,
+                             std::vector<GridPos> &outPath) const
 {
     MazeCandidate bestCandidate;
     bool hasBestCandidate = false;
     bool hasQualifiedCandidate = false;
 
+    // Generate and evaluate multiple candidates, select the best one
     for (int attempt = 0; attempt < definition.candidateCount; attempt++)
     {
         MazeCandidate candidate;
@@ -22,15 +56,9 @@ void MazeGenerator::generate(Maze& maze,
         int minTurnTarget = std::max(8, definition.minCriticalPath / 4);
         int minDetourTarget = std::max(10, definition.minCriticalPath / 3);
         int maxStraightRun = std::max(4, definition.cols / 5);
-        bool meetsSpec = candidate.criticalPathLength >= definition.minCriticalPath
-                      && candidate.deadEnds >= definition.minDeadEnds
-                      && candidate.turnCount >= minTurnTarget
-                      && candidate.routeDetour >= minDetourTarget
-                      && candidate.longestStraightRun <= maxStraightRun;
+        bool meetsSpec = candidate.criticalPathLength >= definition.minCriticalPath && candidate.deadEnds >= definition.minDeadEnds && candidate.turnCount >= minTurnTarget && candidate.routeDetour >= minDetourTarget && candidate.longestStraightRun <= maxStraightRun;
 
-        if (!hasBestCandidate
-            || (meetsSpec && !hasQualifiedCandidate)
-            || (meetsSpec == hasQualifiedCandidate && candidate.score > bestCandidate.score))
+        if (!hasBestCandidate || (meetsSpec && !hasQualifiedCandidate) || (meetsSpec == hasQualifiedCandidate && candidate.score > bestCandidate.score))
         {
             bestCandidate = candidate;
             hasBestCandidate = true;
@@ -49,13 +77,13 @@ void MazeGenerator::generate(Maze& maze,
     outPath = bestCandidate.criticalPath;
 }
 
-void MazeGenerator::initializeGrid(std::vector<TileType>& grid, int rows, int cols) const
+void MazeGenerator::initializeGrid(std::vector<TileType> &grid, int rows, int cols) const
 {
     grid.assign(rows * cols, TILE_WALL);
 }
 
-void MazeGenerator::generateLayout(MazeCandidate& outCandidate,
-                                   const LevelSpec& definition,
+void MazeGenerator::generateLayout(MazeCandidate &outCandidate,
+                                   const LevelSpec &definition,
                                    unsigned int seed) const
 {
     initializeGrid(outCandidate.grid, definition.rows, definition.cols);
@@ -86,27 +114,24 @@ void MazeGenerator::generateLayout(MazeCandidate& outCandidate,
     outCandidate.maxBranchDepth = computeMaxDistance(distances);
     outCandidate.secondOrderBranches = countCellsAtDistance(distances, 2);
     outCandidate.routeDetour =
-        outCandidate.criticalPathLength
-        - (std::abs(outCandidate.exitPos.row - definition.startPos.row)
-        + std::abs(outCandidate.exitPos.col - definition.startPos.col));
+        outCandidate.criticalPathLength - (std::abs(outCandidate.exitPos.row - definition.startPos.row) + std::abs(outCandidate.exitPos.col - definition.startPos.col));
 
-    int exitBias = std::abs(outCandidate.exitPos.row - definition.exitTarget.row)
-                 + std::abs(outCandidate.exitPos.col - definition.exitTarget.col);
+    int exitBias = std::abs(outCandidate.exitPos.row - definition.exitTarget.row) + std::abs(outCandidate.exitPos.col - definition.exitTarget.col);
     outCandidate.score =
-        outCandidate.criticalPathLength * 12 +
-        outCandidate.turnCount * 15 +
-        outCandidate.deadEnds * 8 +
-        outCandidate.maxBranchDepth * 16 +
-        outCandidate.secondOrderBranches * 5 +
-        outCandidate.nearCriticalBranches * 4 +
-        outCandidate.junctionCount * 14 +
-        outCandidate.routeDetour * 10 -
-        outCandidate.longestStraightRun * 18 -
-        exitBias * 2;
+        outCandidate.criticalPathLength * Config::SCORE_CRITICAL_PATH_WEIGHT +
+        outCandidate.turnCount * Config::SCORE_TURN_COUNT_WEIGHT +
+        outCandidate.deadEnds * Config::SCORE_DEAD_END_WEIGHT +
+        outCandidate.maxBranchDepth * Config::SCORE_MAX_BRANCH_DEPTH_WEIGHT +
+        outCandidate.secondOrderBranches * Config::SCORE_SECOND_ORDER_BRANCH_WEIGHT +
+        outCandidate.nearCriticalBranches * Config::SCORE_NEAR_CRITICAL_BRANCH_WEIGHT +
+        outCandidate.junctionCount * Config::SCORE_JUNCTION_COUNT_WEIGHT +
+        outCandidate.routeDetour * Config::SCORE_ROUTE_DETOUR_WEIGHT -
+        outCandidate.longestStraightRun * Config::SCORE_LONGEST_STRAIGHT_RUN_WEIGHT -
+        exitBias * Config::SCORE_EXIT_BIAS_WEIGHT;
 }
 
-void MazeGenerator::carvePerfectMaze(std::vector<TileType>& grid,
-                                     const LevelSpec& definition,
+void MazeGenerator::carvePerfectMaze(std::vector<TileType> &grid,
+                                     const LevelSpec &definition,
                                      unsigned int seed) const
 {
     static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -143,8 +168,7 @@ void MazeGenerator::carvePerfectMaze(std::vector<TileType>& grid,
             GridPos nextNode(currentNode.row + directions[dir][0],
                              currentNode.col + directions[dir][1]);
 
-            if (!isInBounds(nodeRows, nodeCols, nextNode.row, nextNode.col)
-                || visited[toIndex(nodeCols, nextNode.row, nextNode.col)] != 0)
+            if (!isInBounds(nodeRows, nodeCols, nextNode.row, nextNode.col) || visited[toIndex(nodeCols, nextNode.row, nextNode.col)] != 0)
             {
                 continue;
             }
@@ -170,10 +194,10 @@ void MazeGenerator::carvePerfectMaze(std::vector<TileType>& grid,
     }
 }
 
-void MazeGenerator::buildCriticalPath(const std::vector<TileType>& grid,
-                                      const LevelSpec& definition,
-                                      GridPos& outExitPos,
-                                      std::vector<GridPos>& outPath) const
+void MazeGenerator::buildCriticalPath(const std::vector<TileType> &grid,
+                                      const LevelSpec &definition,
+                                      GridPos &outExitPos,
+                                      std::vector<GridPos> &outPath) const
 {
     static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
 
@@ -238,12 +262,8 @@ void MazeGenerator::buildCriticalPath(const std::vector<TileType>& grid,
         }
 
         int nodeIndex = toIndex(nodeCols, currentNode.row, currentNode.col);
-        int targetDistance = std::abs(currentGrid.row - definition.exitTarget.row)
-                           + std::abs(currentGrid.col - definition.exitTarget.col);
-        int nodeScore = distance[nodeIndex] * 24
-                      - targetDistance * 3
-                      + currentGrid.col
-                      - currentGrid.row;
+        int targetDistance = std::abs(currentGrid.row - definition.exitTarget.row) + std::abs(currentGrid.col - definition.exitTarget.col);
+        int nodeScore = distance[nodeIndex] * 24 - targetDistance * 3 + currentGrid.col - currentGrid.row;
 
         if (degree == 1)
         {
@@ -291,10 +311,10 @@ void MazeGenerator::buildCriticalPath(const std::vector<TileType>& grid,
     outExitPos = nodeToGrid(bestNode);
 }
 
-void MazeGenerator::enhanceLayout(std::vector<TileType>& grid,
-                                  const LevelSpec& definition,
-                                  const std::vector<GridPos>& criticalPath,
-                                  const GridPos& exitPos,
+void MazeGenerator::enhanceLayout(std::vector<TileType> &grid,
+                                  const LevelSpec &definition,
+                                  const std::vector<GridPos> &criticalPath,
+                                  const GridPos &exitPos,
                                   unsigned int seed) const
 {
     std::vector<unsigned char> criticalMask(definition.rows * definition.cols, 0);
@@ -329,11 +349,11 @@ void MazeGenerator::enhanceLayout(std::vector<TileType>& grid,
                          seed + 389u);
 }
 
-int MazeGenerator::carveRooms(std::vector<TileType>& grid,
-                              const LevelSpec& definition,
-                              const std::vector<unsigned char>& criticalMask,
-                              std::vector<unsigned char>& roomMask,
-                              std::vector<unsigned char>& doorwayMask,
+int MazeGenerator::carveRooms(std::vector<TileType> &grid,
+                              const LevelSpec &definition,
+                              const std::vector<unsigned char> &criticalMask,
+                              std::vector<unsigned char> &roomMask,
+                              std::vector<unsigned char> &doorwayMask,
                               unsigned int seed) const
 {
     std::vector<int> distances;
@@ -363,9 +383,7 @@ int MazeGenerator::carveRooms(std::vector<TileType>& grid,
         for (int col = 1; col < definition.cols - 1; col++)
         {
             int index = toIndex(definition.cols, row, col);
-            if (!isWalkableValue(grid[index])
-                || criticalMask[index] != 0
-                || (row == definition.startPos.row && col == definition.startPos.col))
+            if (!isWalkableValue(grid[index]) || criticalMask[index] != 0 || (row == definition.startPos.row && col == definition.startPos.col))
             {
                 continue;
             }
@@ -385,10 +403,10 @@ int MazeGenerator::carveRooms(std::vector<TileType>& grid,
 
     std::shuffle(candidates.begin(), candidates.end(), rng);
     std::stable_sort(candidates.begin(), candidates.end(),
-        [](const SpatialCandidate& left, const SpatialCandidate& right)
-        {
-            return left.distanceFromCritical > right.distanceFromCritical;
-        });
+                     [](const SpatialCandidate &left, const SpatialCandidate &right)
+                     {
+                         return left.distanceFromCritical > right.distanceFromCritical;
+                     });
 
     int roomsPlaced = 0;
     static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -411,10 +429,8 @@ int MazeGenerator::carveRooms(std::vector<TileType>& grid,
 
         for (std::size_t dirIndex = 0; dirIndex < order.size(); dirIndex++)
         {
-            int roomRows = definition.roomMinRows
-                + static_cast<int>(rng() % static_cast<unsigned>(definition.roomMaxRows - definition.roomMinRows + 1));
-            int roomCols = definition.roomMinCols
-                + static_cast<int>(rng() % static_cast<unsigned>(definition.roomMaxCols - definition.roomMinCols + 1));
+            int roomRows = definition.roomMinRows + static_cast<int>(rng() % static_cast<unsigned>(definition.roomMaxRows - definition.roomMinRows + 1));
+            int roomCols = definition.roomMinCols + static_cast<int>(rng() % static_cast<unsigned>(definition.roomMaxCols - definition.roomMinCols + 1));
 
             int dir = order[dirIndex];
             if (tryCarveRoom(grid,
@@ -437,11 +453,11 @@ int MazeGenerator::carveRooms(std::vector<TileType>& grid,
     return roomsPlaced;
 }
 
-int MazeGenerator::addLoops(std::vector<TileType>& grid,
-                            const LevelSpec& definition,
-                            const std::vector<unsigned char>& criticalMask,
-                            const std::vector<unsigned char>& roomMask,
-                            const std::vector<unsigned char>& doorwayMask,
+int MazeGenerator::addLoops(std::vector<TileType> &grid,
+                            const LevelSpec &definition,
+                            const std::vector<unsigned char> &criticalMask,
+                            const std::vector<unsigned char> &roomMask,
+                            const std::vector<unsigned char> &doorwayMask,
                             unsigned int seed) const
 {
     if (definition.loopBudget <= 0)
@@ -509,9 +525,7 @@ int MazeGenerator::addLoops(std::vector<TileType>& grid,
 
             int firstIndex = toIndex(definition.cols, neighbors[0].row, neighbors[0].col);
             int secondIndex = toIndex(definition.cols, neighbors[1].row, neighbors[1].col);
-            if (criticalMask[firstIndex] != 0 || criticalMask[secondIndex] != 0
-                || roomMask[firstIndex] != 0 || roomMask[secondIndex] != 0
-                || doorwayMask[firstIndex] != 0 || doorwayMask[secondIndex] != 0)
+            if (criticalMask[firstIndex] != 0 || criticalMask[secondIndex] != 0 || roomMask[firstIndex] != 0 || roomMask[secondIndex] != 0 || doorwayMask[firstIndex] != 0 || doorwayMask[secondIndex] != 0)
             {
                 continue;
             }
@@ -541,19 +555,19 @@ int MazeGenerator::addLoops(std::vector<TileType>& grid,
 
     std::shuffle(candidates.begin(), candidates.end(), rng);
     std::stable_sort(candidates.begin(), candidates.end(),
-        [](const LoopCandidate& left, const LoopCandidate& right)
-        {
-            if (left.pathLength != right.pathLength)
-            {
-                return left.pathLength > right.pathLength;
-            }
-            return left.distanceScore > right.distanceScore;
-        });
+                     [](const LoopCandidate &left, const LoopCandidate &right)
+                     {
+                         if (left.pathLength != right.pathLength)
+                         {
+                             return left.pathLength > right.pathLength;
+                         }
+                         return left.distanceScore > right.distanceScore;
+                     });
 
     int loopsAdded = 0;
     for (std::size_t i = 0; i < candidates.size() && loopsAdded < definition.loopBudget; i++)
     {
-        const GridPos& pos = candidates[i].pos;
+        const GridPos &pos = candidates[i].pos;
         int index = toIndex(definition.cols, pos.row, pos.col);
         if (grid[index] != TILE_WALL)
         {
@@ -567,8 +581,7 @@ int MazeGenerator::addLoops(std::vector<TileType>& grid,
             {
                 int checkRow = pos.row + rowOffset;
                 int checkCol = pos.col + colOffset;
-                if (isInBounds(definition.rows, definition.cols, checkRow, checkCol)
-                    && openedMask[toIndex(definition.cols, checkRow, checkCol)] != 0)
+                if (isInBounds(definition.rows, definition.cols, checkRow, checkCol) && openedMask[toIndex(definition.cols, checkRow, checkCol)] != 0)
                 {
                     touchesExistingLoop = true;
                     break;
@@ -616,12 +629,12 @@ int MazeGenerator::addLoops(std::vector<TileType>& grid,
     return loopsAdded;
 }
 
-int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
-                                        const LevelSpec& definition,
-                                        const std::vector<GridPos>& criticalPath,
-                                        const GridPos& exitPos,
-                                        const std::vector<unsigned char>& roomMask,
-                                        const std::vector<unsigned char>& doorwayMask,
+int MazeGenerator::addDecisionJunctions(std::vector<TileType> &grid,
+                                        const LevelSpec &definition,
+                                        const std::vector<GridPos> &criticalPath,
+                                        const GridPos &exitPos,
+                                        const std::vector<unsigned char> &roomMask,
+                                        const std::vector<unsigned char> &doorwayMask,
                                         unsigned int seed) const
 {
     std::vector<int> distances;
@@ -641,16 +654,12 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
         for (int col = 1; col < definition.cols - 1; col++)
         {
             int index = toIndex(definition.cols, row, col);
-            if (!isNodeCell(GridPos(row, col))
-                || !isWalkableValue(grid[index])
-                || roomMask[index] != 0
-                || doorwayMask[index] != 0)
+            if (!isNodeCell(GridPos(row, col)) || !isWalkableValue(grid[index]) || roomMask[index] != 0 || doorwayMask[index] != 0)
             {
                 continue;
             }
 
-            if ((row == definition.startPos.row && col == definition.startPos.col)
-                || (row == exitPos.row && col == exitPos.col))
+            if ((row == definition.startPos.row && col == definition.startPos.col) || (row == exitPos.row && col == exitPos.col))
             {
                 continue;
             }
@@ -672,17 +681,17 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
 
     std::shuffle(candidates.begin(), candidates.end(), rng);
     std::stable_sort(candidates.begin(), candidates.end(),
-        [](const SpatialCandidate& left, const SpatialCandidate& right)
-        {
-            int leftScore = (left.degree == 2 ? 120 : 0) - left.distanceFromCritical * 10;
-            int rightScore = (right.degree == 2 ? 120 : 0) - right.distanceFromCritical * 10;
-            return leftScore > rightScore;
-        });
+                     [](const SpatialCandidate &left, const SpatialCandidate &right)
+                     {
+                         int leftScore = (left.degree == 2 ? 120 : 0) - left.distanceFromCritical * 10;
+                         int rightScore = (right.degree == 2 ? 120 : 0) - right.distanceFromCritical * 10;
+                         return leftScore > rightScore;
+                     });
 
     int junctionsAdded = 0;
     for (std::size_t i = 0; i < candidates.size() && junctionsAdded < definition.junctionTarget; i++)
     {
-        const GridPos& center = candidates[i].pos;
+        const GridPos &center = candidates[i].pos;
         int centerIndex = toIndex(definition.cols, center.row, center.col);
         bool tooCloseToExisting = false;
 
@@ -697,8 +706,7 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
                     continue;
                 }
 
-                if (usedCenters[toIndex(definition.cols, checkRow, checkCol)] != 0
-                    && std::abs(rowOffset) + std::abs(colOffset) < 6)
+                if (usedCenters[toIndex(definition.cols, checkRow, checkCol)] != 0 && std::abs(rowOffset) + std::abs(colOffset) < 6)
                 {
                     tooCloseToExisting = true;
                     break;
@@ -725,10 +733,7 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
             int nodeRow = center.row + directions[dir][0] * 2;
             int nodeCol = center.col + directions[dir][1] * 2;
 
-            if (!isInBounds(definition.rows, definition.cols, corridorRow, corridorCol)
-                || !isInBounds(definition.rows, definition.cols, nodeRow, nodeCol)
-                || grid[toIndex(definition.cols, corridorRow, corridorCol)] != TILE_WALL
-                || grid[toIndex(definition.cols, nodeRow, nodeCol)] != TILE_WALL)
+            if (!isInBounds(definition.rows, definition.cols, corridorRow, corridorCol) || !isInBounds(definition.rows, definition.cols, nodeRow, nodeCol) || grid[toIndex(definition.cols, corridorRow, corridorCol)] != TILE_WALL || grid[toIndex(definition.cols, nodeRow, nodeCol)] != TILE_WALL)
             {
                 continue;
             }
@@ -744,8 +749,7 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
                     continue;
                 }
 
-                if (isInBounds(definition.rows, definition.cols, nextRow, nextCol)
-                    && isWalkableValue(grid[toIndex(definition.cols, nextRow, nextCol)]))
+                if (isInBounds(definition.rows, definition.cols, nextRow, nextCol) && isWalkableValue(grid[toIndex(definition.cols, nextRow, nextCol)]))
                 {
                     isolated = false;
                     break;
@@ -793,10 +797,7 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
                     continue;
                 }
 
-                if (!isInBounds(definition.rows, definition.cols, corridorRow, corridorCol)
-                    || !isInBounds(definition.rows, definition.cols, nodeRow, nodeCol)
-                    || grid[toIndex(definition.cols, corridorRow, corridorCol)] != TILE_WALL
-                    || grid[toIndex(definition.cols, nodeRow, nodeCol)] != TILE_WALL)
+                if (!isInBounds(definition.rows, definition.cols, corridorRow, corridorCol) || !isInBounds(definition.rows, definition.cols, nodeRow, nodeCol) || grid[toIndex(definition.cols, corridorRow, corridorCol)] != TILE_WALL || grid[toIndex(definition.cols, nodeRow, nodeCol)] != TILE_WALL)
                 {
                     continue;
                 }
@@ -812,8 +813,7 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
                         continue;
                     }
 
-                    if (isInBounds(definition.rows, definition.cols, nextRow, nextCol)
-                        && isWalkableValue(grid[toIndex(definition.cols, nextRow, nextCol)]))
+                    if (isInBounds(definition.rows, definition.cols, nextRow, nextCol) && isWalkableValue(grid[toIndex(definition.cols, nextRow, nextCol)]))
                     {
                         isolated = false;
                         break;
@@ -834,12 +834,12 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
 
             std::shuffle(extensionOptions.begin(), extensionOptions.end(), rng);
             std::stable_sort(extensionOptions.begin(), extensionOptions.end(),
-                [previousRowStep, previousColStep](const BranchDirection& left, const BranchDirection& right)
-                {
-                    bool leftTurns = left.rowStep != previousRowStep || left.colStep != previousColStep;
-                    bool rightTurns = right.rowStep != previousRowStep || right.colStep != previousColStep;
-                    return leftTurns && !rightTurns;
-                });
+                             [previousRowStep, previousColStep](const BranchDirection &left, const BranchDirection &right)
+                             {
+                                 bool leftTurns = left.rowStep != previousRowStep || left.colStep != previousColStep;
+                                 bool rightTurns = right.rowStep != previousRowStep || right.colStep != previousColStep;
+                                 return leftTurns && !rightTurns;
+                             });
 
             BranchDirection nextBranch = extensionOptions[0];
             GridPos nextNode(current.row + nextBranch.rowStep * 2,
@@ -862,294 +862,16 @@ int MazeGenerator::addDecisionJunctions(std::vector<TileType>& grid,
     return junctionsAdded;
 }
 
-void MazeGenerator::computeDistanceFromCritical(const std::vector<TileType>& grid,
-                                                int rows,
-                                                int cols,
-                                                const std::vector<GridPos>& criticalPath,
-                                                std::vector<int>& distances) const
-{
-    static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-    std::queue<GridPos> frontier;
-
-    distances.assign(rows * cols, -1);
-
-    for (std::size_t i = 0; i < criticalPath.size(); i++)
-    {
-        int index = toIndex(cols, criticalPath[i].row, criticalPath[i].col);
-        distances[index] = 0;
-        frontier.push(criticalPath[i]);
-    }
-
-    while (!frontier.empty())
-    {
-        GridPos current = frontier.front();
-        frontier.pop();
-
-        for (int i = 0; i < 4; i++)
-        {
-            int nextRow = current.row + directions[i][0];
-            int nextCol = current.col + directions[i][1];
-
-            if (!isInBounds(rows, cols, nextRow, nextCol))
-            {
-                continue;
-            }
-
-            int nextIndex = toIndex(cols, nextRow, nextCol);
-            if (distances[nextIndex] != -1 || !isWalkableValue(grid[nextIndex]))
-            {
-                continue;
-            }
-
-            distances[nextIndex] = distances[toIndex(cols, current.row, current.col)] + 1;
-            frontier.push(GridPos(nextRow, nextCol));
-        }
-    }
-}
-
-int MazeGenerator::countDeadEnds(const std::vector<TileType>& grid,
+bool MazeGenerator::tryCarveRoom(std::vector<TileType> &grid,
                                  int rows,
                                  int cols,
-                                 const std::vector<GridPos>& criticalPath) const
-{
-    std::vector<unsigned char> criticalMask(rows * cols, 0);
-    int deadEnds = 0;
-
-    for (std::size_t i = 0; i < criticalPath.size(); i++)
-    {
-        criticalMask[toIndex(cols, criticalPath[i].row, criticalPath[i].col)] = 1;
-    }
-
-    for (int row = 1; row < rows - 1; row++)
-    {
-        for (int col = 1; col < cols - 1; col++)
-        {
-            int index = toIndex(cols, row, col);
-            if (criticalMask[index] != 0 || !isWalkableValue(grid[index]))
-            {
-                continue;
-            }
-
-            if (countWalkableNeighbors(grid, rows, cols, row, col) <= 1)
-            {
-                deadEnds++;
-            }
-        }
-    }
-
-    return deadEnds;
-}
-
-int MazeGenerator::countWalkableNeighbors(const std::vector<TileType>& grid,
-                                          int rows,
-                                          int cols,
-                                          int row,
-                                          int col) const
-{
-    static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-    int neighbors = 0;
-
-    for (int i = 0; i < 4; i++)
-    {
-        int nextRow = row + directions[i][0];
-        int nextCol = col + directions[i][1];
-        if (isInBounds(rows, cols, nextRow, nextCol)
-            && isWalkableValue(grid[toIndex(cols, nextRow, nextCol)]))
-        {
-            neighbors++;
-        }
-    }
-
-    return neighbors;
-}
-
-int MazeGenerator::countTurns(const std::vector<GridPos>& path) const
-{
-    if (path.size() < 3)
-    {
-        return 0;
-    }
-
-    int turns = 0;
-    int prevRowStep = path[1].row - path[0].row;
-    int prevColStep = path[1].col - path[0].col;
-
-    for (std::size_t i = 2; i < path.size(); i++)
-    {
-        int rowStep = path[i].row - path[i - 1].row;
-        int colStep = path[i].col - path[i - 1].col;
-
-        if (rowStep != prevRowStep || colStep != prevColStep)
-        {
-            turns++;
-        }
-
-        prevRowStep = rowStep;
-        prevColStep = colStep;
-    }
-
-    return turns;
-}
-
-int MazeGenerator::computeLongestStraightRun(const std::vector<GridPos>& path) const
-{
-    if (path.size() < 2)
-    {
-        return 0;
-    }
-
-    int bestRun = 1;
-    int currentRun = 1;
-    int prevRowStep = path[1].row - path[0].row;
-    int prevColStep = path[1].col - path[0].col;
-
-    for (std::size_t i = 2; i < path.size(); i++)
-    {
-        int rowStep = path[i].row - path[i - 1].row;
-        int colStep = path[i].col - path[i - 1].col;
-
-        if (rowStep == prevRowStep && colStep == prevColStep)
-        {
-            currentRun++;
-        }
-        else
-        {
-            currentRun = 1;
-        }
-
-        if (currentRun > bestRun)
-        {
-            bestRun = currentRun;
-        }
-
-        prevRowStep = rowStep;
-        prevColStep = colStep;
-    }
-
-    return bestRun;
-}
-
-int MazeGenerator::computeMaxDistance(const std::vector<int>& distances) const
-{
-    int maxDistance = 0;
-    for (std::size_t i = 0; i < distances.size(); i++)
-    {
-        if (distances[i] > maxDistance)
-        {
-            maxDistance = distances[i];
-        }
-    }
-    return maxDistance;
-}
-
-int MazeGenerator::countCellsAtDistance(const std::vector<int>& distances, int minDistance) const
-{
-    int count = 0;
-    for (std::size_t i = 0; i < distances.size(); i++)
-    {
-        if (distances[i] >= minDistance)
-        {
-            count++;
-        }
-    }
-    return count;
-}
-
-int MazeGenerator::countCellsInDistanceRange(const std::vector<int>& distances,
-                                             int minDistance,
-                                             int maxDistance) const
-{
-    int count = 0;
-    for (std::size_t i = 0; i < distances.size(); i++)
-    {
-        if (distances[i] >= minDistance && distances[i] <= maxDistance)
-        {
-            count++;
-        }
-    }
-    return count;
-}
-
-int MazeGenerator::countDecisionJunctions(const std::vector<TileType>& grid,
-                                          int rows,
-                                          int cols) const
-{
-    int count = 0;
-    for (int row = 1; row < rows - 1; row++)
-    {
-        for (int col = 1; col < cols - 1; col++)
-        {
-            if (!isNodeCell(GridPos(row, col)) || !isWalkableValue(grid[toIndex(cols, row, col)]))
-            {
-                continue;
-            }
-
-            if (countWalkableNeighbors(grid, rows, cols, row, col) >= 3)
-            {
-                count++;
-            }
-        }
-    }
-
-    return count;
-}
-
-int MazeGenerator::shortestPathLength(const std::vector<TileType>& grid,
-                                      int rows,
-                                      int cols,
-                                      const GridPos& start,
-                                      const GridPos& target) const
-{
-    static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-    std::queue<GridPos> frontier;
-    std::vector<int> distances(rows * cols, -1);
-
-    frontier.push(start);
-    distances[toIndex(cols, start.row, start.col)] = 0;
-
-    while (!frontier.empty())
-    {
-        GridPos current = frontier.front();
-        frontier.pop();
-
-        if (current.row == target.row && current.col == target.col)
-        {
-            return distances[toIndex(cols, current.row, current.col)];
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
-            int nextRow = current.row + directions[i][0];
-            int nextCol = current.col + directions[i][1];
-            if (!isInBounds(rows, cols, nextRow, nextCol))
-            {
-                continue;
-            }
-
-            int index = toIndex(cols, nextRow, nextCol);
-            if (distances[index] != -1 || !isWalkableValue(grid[index]))
-            {
-                continue;
-            }
-
-            distances[index] = distances[toIndex(cols, current.row, current.col)] + 1;
-            frontier.push(GridPos(nextRow, nextCol));
-        }
-    }
-
-    return -1;
-}
-
-bool MazeGenerator::tryCarveRoom(std::vector<TileType>& grid,
-                                 int rows,
-                                 int cols,
-                                 const GridPos& doorway,
+                                 const GridPos &doorway,
                                  int directionRow,
                                  int directionCol,
                                  int roomRows,
                                  int roomCols,
-                                 std::vector<unsigned char>& roomMask,
-                                 std::vector<unsigned char>& doorwayMask) const
+                                 std::vector<unsigned char> &roomMask,
+                                 std::vector<unsigned char> &doorwayMask) const
 {
     int top = 0;
     int left = 0;
@@ -1226,14 +948,12 @@ bool MazeGenerator::tryCarveRoom(std::vector<TileType>& grid,
                     continue;
                 }
 
-                if (nextRow == doorway.row && nextCol == doorway.col
-                    && row == entryRow && col == entryCol)
+                if (nextRow == doorway.row && nextCol == doorway.col && row == entryRow && col == entryCol)
                 {
                     continue;
                 }
 
-                if (isInBounds(rows, cols, nextRow, nextCol)
-                    && isWalkableValue(grid[toIndex(cols, nextRow, nextCol)]))
+                if (isInBounds(rows, cols, nextRow, nextCol) && isWalkableValue(grid[toIndex(cols, nextRow, nextCol)]))
                 {
                     return false;
                 }
@@ -1254,27 +974,12 @@ bool MazeGenerator::tryCarveRoom(std::vector<TileType>& grid,
     return true;
 }
 
-bool MazeGenerator::isWalkableValue(TileType tileValue) const
-{
-    return tileValue != TILE_WALL;
-}
-
-bool MazeGenerator::isInBounds(int rows, int cols, int row, int col) const
-{
-    return row >= 0 && row < rows && col >= 0 && col < cols;
-}
-
-bool MazeGenerator::isNodeCell(const GridPos& pos) const
-{
-    return pos.row % 2 == 1 && pos.col % 2 == 1;
-}
-
-GridPos MazeGenerator::gridToNode(const GridPos& gridPos) const
+GridPos MazeGenerator::gridToNode(const GridPos &gridPos) const
 {
     return GridPos((gridPos.row - 1) / 2, (gridPos.col - 1) / 2);
 }
 
-GridPos MazeGenerator::nodeToGrid(const GridPos& nodePos) const
+GridPos MazeGenerator::nodeToGrid(const GridPos &nodePos) const
 {
     return GridPos(nodePos.row * 2 + 1, nodePos.col * 2 + 1);
 }

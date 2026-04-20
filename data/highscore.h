@@ -14,12 +14,14 @@ class HighScoreManager
 public:
     HighScoreManager();
 
-    void load();
-    void save();
-    void add(const char* playerName, int score);
+    // Load/save with error handling
+    // Returns true if load/save successful, false on file error or parse failure
+    bool load();
+    bool save();
+    void add(const char *playerName, int score);
 
     int getCount() const { return count; }
-    const HighScoreEntry& getEntry(int index) const { return entries[index]; }
+    const HighScoreEntry &getEntry(int index) const { return entries[index]; }
     int getBestScore() const;
 
 private:

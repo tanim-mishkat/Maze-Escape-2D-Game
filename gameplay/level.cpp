@@ -6,6 +6,7 @@ Level::Level() : currentIndex(0), procedural(false)
 
 void Level::load(int levelIndex)
 {
+    // Game::startLevel() should have already validated levelIndex, but validate again for safety
     if (levelIndex < 0 || levelIndex >= Config::TOTAL_LEVELS)
     {
         levelIndex = 0;
@@ -13,7 +14,7 @@ void Level::load(int levelIndex)
 
     currentIndex = levelIndex;
     procedural = false;
-    const LevelSpec& def = LevelData::levels[levelIndex];
+    const LevelSpec &def = LevelData::levels[levelIndex];
     maze.loadLevel(def);
 }
 
@@ -22,7 +23,7 @@ void Level::loadProcedural(int levelIndex)
     load(levelIndex);
 }
 
-const LevelSpec& Level::getDefinition() const
+const LevelSpec &Level::getDefinition() const
 {
     if (currentIndex >= 0 && currentIndex < Config::TOTAL_LEVELS)
     {

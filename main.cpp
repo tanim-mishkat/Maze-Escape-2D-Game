@@ -5,9 +5,8 @@
 #include "core/game.h"
 #include "core/config.h"
 
-// Single game instance — static avoids heap allocation and the broken delete-after-glutMainLoop pattern
-static Game gameInstance;
-static Game* game = nullptr;
+// Single game instance — static avoids heap allocation
+static Game *game = nullptr;
 
 // Window dimensions
 int windowWidth = Config::DEFAULT_WINDOW_WIDTH;
@@ -119,7 +118,7 @@ void update()
     }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     // Initialize GLUT
     glutInit(&argc, argv);
@@ -143,18 +142,27 @@ int main(int argc, char** argv)
     glutSpecialFunc(specialDown);
     glutSpecialUpFunc(specialUp);
     glutMouseFunc(mouseClick);
-    glutPassiveMotionFunc(mouseMove);  // hover without button held
-    glutMotionFunc(mouseMove);         // hover with button held
+    glutPassiveMotionFunc(mouseMove); // hover without button held
+    glutMotionFunc(mouseMove);        // hover with button held
     glutIdleFunc(update);
 
-    // Initialize game
-    game = &gameInstance;
+    // Initialize game - heap allocation
+    game = new Game();
     game->init();
 
     reshape(windowWidth, windowHeight);
 
     // Start main loop
     glutMainLoop();
+
+    // Cleanup (note: glutMainLoop normally never returns in traditional GLUT,
+    // but this is here for completeness and forward compatibility)
+    if (game)
+    {
+        game->shutdown();
+        delete game;
+        game = nullptr;
+    }
 
     return 0;
 }

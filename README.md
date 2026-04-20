@@ -13,6 +13,89 @@ The game runs as a five-stage campaign with per-level maze sizes ranging from `1
 - Explore carefully: side paths can lead to dead ends, rooms, loops, and misleading junctions.
 - Finish all five stages as quickly as possible.
 
+## Difficulty Progression
+
+Maze difficulty increases across the five stages through multiple mechanisms:
+
+1. **Grid Size**: Stages increase from 15×21 tiles to 29×41 tiles
+   - Larger grids provide more room for complex routing and dead ends
+
+2. **Path Complexity**: Later stages feature:
+   - More decision junctions (3-way and 4-way intersections)
+   - Greater path length and turn counts
+   - Increased detour routes relative to critical path
+   - More dead ends and misleading branches
+
+3. **Scoring Window**: Par times increase, but the time scoring window (2× par time) creates tighter scoring requirements for higher levels
+   - Stage 1 Par: 35s → Scoring window: 70s
+   - Stage 5 Par: 82s → Scoring window: 164s
+
+4. **Maze Generation Tuning**: See **Maze Generation Algorithm** section and `Config::SCORE_*_WEIGHT` constants in `core/config.h`
+
+## Scoring Formula
+
+Score is calculated based on completion time relative to the par time for that stage:
+
+```
+Scoring Window = Par Time × 2
+Score Base = Scoring Window - Elapsed Time
+Final Score = max(0, Score Base / 25)  // rounded down per 25ms
+```
+
+- Faster clears earn more points
+- Completing within par time earns the maximum points for that stage
+- Completing beyond 2× par time earns 0 points
+- Total campaign score is the sum of all five stage scores
+
+## Maze Generation Algorithm
+
+The maze generator creates challenging but fair mazes through a multi-step process:
+
+### Step 1: Generate Candidate Layouts
+
+- Creates 28-64 complete maze candidates (count varies by difficulty level)
+- Uses depth-first search (DFS) to carve "perfect" mazes (no loops, single solution path)
+- Each candidate is deterministically seeded so the same level always generates the same mazes
+
+### Step 2: Analyze Each Candidate
+
+For each candidate, the generator computes:
+
+- **Critical Path**: Shortest route from start to exit (BFS pathfinding)
+- **Turn Count**: Number of direction changes along the critical path
+- **Dead Ends**: Count of tile clusters that lead nowhere
+- **Junctions**: Count of 3-way or 4-way intersections
+- **Branch Depth**: Maximum depth of sub-branches from critical path
+- **Route Detour**: How much longer the actual longest path is vs. critical path
+- **Straight Runs**: Length of the longest corridor without turns
+
+### Step 3: Score and Select
+
+Each candidate receives a composite score based on these metrics, using weighted factors from `Config`:
+
+```cpp
+score = critical_path × SCORE_CRITICAL_PATH_WEIGHT (12)
+      + turns × SCORE_TURN_COUNT_WEIGHT (15)
+      + dead_ends × SCORE_DEAD_END_WEIGHT (8)
+      + ... (more factors)
+      - longest_straight × SCORE_LONGEST_STRAIGHT_RUN_WEIGHT (18)  // penalize simplicity
+      - exit_distance_bias × 2
+```
+
+- Candidates meeting difficulty specifications are prioritized
+- If multiple candidates qualify, the highest-scoring one is selected
+- If no candidates meet specs, the best candidate is selected anyway
+
+### Step 4: Optional Enhancement
+
+Before finalizing, the maze can be enhanced with:
+
+- Strategic room carving (open areas to explore)
+- Optional loops (non-trivial shortcuts)
+- Additional junctions (increased decision points)
+
+**Tuning**: Adjust weight constants in `core/config.h` in the `Config::SCORE_*_WEIGHT` section to modify difficulty progression.
+
 ## Features
 
 - Procedural maze generation with deterministic per-level specifications
@@ -33,13 +116,35 @@ The game runs as a five-stage campaign with per-level maze sizes ranging from `1
 
 ## Campaign Stages
 
-| Stage | Name | Grid | Decision Junctions | Par Time |
-|-------|------|------|--------------------|----------|
-| 1 | Orientation Grid | 15x21 | 4 | 35s |
-| 2 | Archive Drift | 17x25 | 4 | 42s |
-| 3 | Foundry Knots | 19x29 | 4 | 50s |
-| 4 | Blackout Loop | 25x35 | 5 | 68s |
-| 5 | Final Nexus | 29x41 | 6 | 82s |
+| Stage | Name             | Grid  | Decision Junctions | Par Time |
+| ----- | ---------------- | ----- | ------------------ | -------- |
+| 1     | Orientation Grid | 15x21 | 4                  | 35s      |
+| 2     | Archive Drift    | 17x25 | 4                  | 42s      |
+| 3     | Foundry Knots    | 19x29 | 4                  | 50s      |
+| 4     | Blackout Loop    | 25x35 | 5                  | 68s      |
+| 5     | Final Nexus      | 29x41 | 6                  | 82s      |
+
+## Configuration & Tuning
+
+All game constants are centralized in `core/config.h`:
+
+### Visual Constants
+
+- `FLOOR_SHADE_*`: Floor tile coloring
+- `EXIT_PULSE_*`: Exit animation parameters
+- `HUD_PANEL_*`: Sidebar panel dimensions
+
+### Gameplay Constants
+
+- `HOLD_MOVE_INITIAL_DELAY_MS`: Keyboard repeat initial delay (170ms)
+- `HOLD_MOVE_REPEAT_INTERVAL_MS`: Keyboard repeat interval (95ms)
+- `TIME_SCORE_WINDOW_MULTIPLIER`: Par time × this = scoring window (2×)
+- `TIME_SCORE_DIVISOR_MS`: Score granularity (25ms per point)
+
+### Maze Generation Constants
+
+- `SCORE_*_WEIGHT`: Difficulty tuning weights (see **Maze Generation Algorithm**)
+- `MIN/MAX_CANDIDATE_COUNT`: How many maze candidates to generate per level
 
 ## Project Structure
 

@@ -1,5 +1,6 @@
 #include "highscore.h"
-#include <cstdio>
+#include <fstream>
+#include <sstream>
 #include <cstring>
 #include <cstdlib>
 
@@ -12,67 +13,96 @@ HighScoreManager::HighScoreManager() : count(0)
     }
 }
 
-void HighScoreManager::load()
+bool HighScoreManager::load()
 {
-    FILE* file = std::fopen(Config::HIGH_SCORE_FILE, "r");
-    char line[128];
+    std::ifstream file(Config::HIGH_SCORE_FILE);
+    std::string line;
 
     count = 0;
 
-    if (file == nullptr)
+    if (!file.is_open())
     {
-        return;
+        // File doesn't exist or can't be opened - silently initialize empty
+        return false;
     }
 
-    while (count < Config::MAX_HIGH_SCORES && std::fgets(line, sizeof(line), file) != nullptr)
+    while (count < Config::MAX_HIGH_SCORES && std::getline(file, line))
     {
-        HighScoreEntry entry = {};
-        char* newLine = std::strchr(line, '\n');
-        char* pipe = std::strrchr(line, '|');
-
-        if (newLine != nullptr)
+        // Skip empty lines
+        if (line.empty())
         {
-            *newLine = '\0';
+            continue;
         }
 
-        if (pipe != nullptr)
+        HighScoreEntry entry = {};
+        std::size_t pipePos = line.find('|');
+
+        if (pipePos != std::string::npos)
         {
-            *pipe = '\0';
-            std::snprintf(entry.name, Config::MAX_PLAYER_NAME_LENGTH + 1, "%s", 
-                         line[0] == '\0' ? "PLAYER" : line);
-            entry.score = std::atoi(pipe + 1);
+            // Format: "NAME|SCORE"
+            std::string nameStr = line.substr(0, pipePos);
+            std::string scoreStr = line.substr(pipePos + 1);
+
+            // Validate score string
+            char *scoreEnd = nullptr;
+            long scoreVal = std::strtol(scoreStr.c_str(), &scoreEnd, 10);
+
+            // If no valid characters were parsed or score is out of range, skip entry
+            if (scoreEnd == scoreStr.c_str() || scoreVal < 0 || scoreVal > 1000000)
+            {
+                continue;
+            }
+
+            // Copy name, truncate if too long
+            std::strncpy(entry.name,
+                         nameStr.empty() ? "PLAYER" : nameStr.c_str(),
+                         Config::MAX_PLAYER_NAME_LENGTH);
+            entry.name[Config::MAX_PLAYER_NAME_LENGTH] = '\0';
+            entry.score = static_cast<int>(scoreVal);
         }
         else
         {
-            std::snprintf(entry.name, Config::MAX_PLAYER_NAME_LENGTH + 1, "PLAYER");
-            entry.score = std::atoi(line);
+            // No pipe separator found - invalid format, skip entry
+            continue;
         }
 
         entries[count] = entry;
         count++;
     }
 
-    std::fclose(file);
+    file.close();
+    return true; // Successfully loaded (even if file was empty)
 }
 
-void HighScoreManager::save()
+bool HighScoreManager::save()
 {
-    FILE* file = std::fopen(Config::HIGH_SCORE_FILE, "w");
+    std::ofstream file(Config::HIGH_SCORE_FILE);
 
-    if (file == nullptr)
+    if (!file.is_open())
     {
-        return;
+        // Failed to open file for writing - silently fail
+        // (alternative: log error to stderr)
+        return false;
     }
 
     for (int i = 0; i < count; i++)
     {
-        std::fprintf(file, "%s|%d\n", entries[i].name, entries[i].score);
+        file << entries[i].name << "|" << entries[i].score << "\n";
     }
 
-    std::fclose(file);
+    if (!file.good())
+    {
+        // Write failed - file may be corrupted
+        // (alternative: log error to stderr)
+        file.close();
+        return false;
+    }
+
+    file.close();
+    return true; // Successfully saved
 }
 
-void HighScoreManager::add(const char* playerName, int score)
+void HighScoreManager::add(const char *playerName, int score)
 {
     if (score < 0)
     {

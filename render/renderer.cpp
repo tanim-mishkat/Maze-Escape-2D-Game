@@ -19,10 +19,10 @@ namespace Renderer
     {
         glColor4f(r, g, b, a);
         glBegin(GL_QUADS);
-            glVertex2f(x, y);
-            glVertex2f(x + width, y);
-            glVertex2f(x + width, y + height);
-            glVertex2f(x, y + height);
+        glVertex2f(x, y);
+        glVertex2f(x + width, y);
+        glVertex2f(x + width, y + height);
+        glVertex2f(x, y + height);
         glEnd();
     }
 
@@ -32,30 +32,30 @@ namespace Renderer
         glLineWidth(lineWidth);
         glColor4f(r, g, b, a);
         glBegin(GL_LINE_LOOP);
-            glVertex2f(x, y);
-            glVertex2f(x + width, y);
-            glVertex2f(x + width, y + height);
-            glVertex2f(x, y + height);
+        glVertex2f(x, y);
+        glVertex2f(x + width, y);
+        glVertex2f(x + width, y + height);
+        glVertex2f(x, y + height);
         glEnd();
     }
 
-    void drawFloor(const BoardMetrics& metrics)
+    void drawFloor(const BoardMetrics &metrics)
     {
         for (int row = 0; row < metrics.rows; row++)
         {
             for (int col = 0; col < metrics.cols; col++)
             {
                 ScreenPos pos = Coords::gridToScreen(metrics, row, col);
-                float shade = ((row + col) % 2 == 0) ? 0.10f : 0.12f;
+                float shade = ((row + col) % 2 == 0) ? Config::FLOOR_SHADE_DARK : Config::FLOOR_SHADE_LIGHT;
                 drawFilledRect(pos.x, pos.y, metrics.tileSize, metrics.tileSize,
-                               shade, shade + 0.02f, shade + 0.04f);
+                               shade, shade + Config::FLOOR_SHADE_GRADIENT, shade + Config::FLOOR_SHADE_GRADIENT * 2);
             }
         }
     }
 
-    void drawMaze(const Maze& maze)
+    void drawMaze(const Maze &maze)
     {
-        const BoardMetrics& metrics = maze.getMetrics();
+        const BoardMetrics &metrics = maze.getMetrics();
         for (int row = 0; row < maze.getRows(); row++)
         {
             for (int col = 0; col < maze.getCols(); col++)
@@ -81,19 +81,19 @@ namespace Renderer
         }
     }
 
-    void drawExit(const Maze& maze, float animationTime)
+    void drawExit(const Maze &maze, float animationTime)
     {
-        const BoardMetrics& metrics = maze.getMetrics();
+        const BoardMetrics &metrics = maze.getMetrics();
         GridPos exitPos = maze.getExitPos();
         ScreenPos pos = Coords::gridToScreen(metrics, exitPos);
-        float pulse = 0.5f + 0.5f * std::sin(animationTime * 4.0f);
-        float glowInset = metrics.tileSize * 0.16f;
-        float poleX = pos.x + metrics.tileSize * 0.30f;
-        float poleY = pos.y + metrics.tileSize * 0.16f;
+        float pulse = Config::EXIT_PULSE_AMPLITUDE + Config::EXIT_PULSE_AMPLITUDE * std::sin(animationTime * Config::EXIT_PULSE_FREQUENCY);
+        float glowInset = metrics.tileSize * Config::EXIT_GLOW_INSET_RATIO;
+        float poleX = pos.x + metrics.tileSize * Config::EXIT_OUTER_RING_RATIO;
+        float poleY = pos.y + metrics.tileSize * Config::EXIT_INNER_RING_RATIO;
         float poleWidth = maxFloat(2.0f, metrics.tileSize * 0.08f);
         float poleHeight = metrics.tileSize * 0.60f;
-        float flagWidth = metrics.tileSize * (0.30f + pulse * 0.12f);
-        float flagOffsetY = metrics.tileSize * 0.16f;
+        float flagWidth = metrics.tileSize * (Config::EXIT_OUTER_RING_RATIO + pulse * 0.12f);
+        float flagOffsetY = metrics.tileSize * Config::EXIT_INNER_RING_RATIO;
 
         drawFilledRect(pos.x, pos.y, metrics.tileSize, metrics.tileSize,
                        0.18f, 0.26f, 0.12f, 0.45f);
@@ -114,12 +114,12 @@ namespace Renderer
         glColor4f(0.2f, 0.96f - pulse * 0.10f, 0.3f, 1.0f);
 
         glBegin(GL_TRIANGLES);
-            glVertex2f(poleX + poleWidth,
-                       poleY + poleHeight - flagOffsetY * 0.25f);
-            glVertex2f(poleX + poleWidth + flagWidth,
-                       poleY + poleHeight - flagOffsetY * 0.60f);
-            glVertex2f(poleX + poleWidth,
-                       poleY + poleHeight - flagOffsetY);
+        glVertex2f(poleX + poleWidth,
+                   poleY + poleHeight - flagOffsetY * 0.25f);
+        glVertex2f(poleX + poleWidth + flagWidth,
+                   poleY + poleHeight - flagOffsetY * 0.60f);
+        glVertex2f(poleX + poleWidth,
+                   poleY + poleHeight - flagOffsetY);
         glEnd();
 
         drawRectOutline(pos.x + metrics.tileInnerPadding,
@@ -130,7 +130,7 @@ namespace Renderer
                         1.0f, 0.94f, 0.60f, 0.55f);
     }
 
-    void drawPlayer(const Player& player, const BoardMetrics& metrics)
+    void drawPlayer(const Player &player, const BoardMetrics &metrics)
     {
         ScreenPos pos = Coords::gridToScreen(metrics, player.getGridPos());
         float x = pos.x + metrics.playerPadding;
@@ -149,44 +149,44 @@ namespace Renderer
                         0.95f, 1.0f, 0.97f, 0.9f);
     }
 
-    float getGameCanvasWidth(const BoardMetrics& metrics)
+    float getGameCanvasWidth(const BoardMetrics &metrics)
     {
         return metrics.boardWidth + metrics.sidePanelWidth + 52.0f;
     }
 
-    float getGameCanvasHeight(const BoardMetrics& metrics)
+    float getGameCanvasHeight(const BoardMetrics &metrics)
     {
         return metrics.boardHeight + 40.0f;
     }
 
-    float getGameCanvasX(int windowWidth, const BoardMetrics& metrics)
+    float getGameCanvasX(int windowWidth, const BoardMetrics &metrics)
     {
         float x = (windowWidth - getGameCanvasWidth(metrics)) * 0.5f;
         return x < 16.0f ? 16.0f : x;
     }
 
-    float getGameCanvasY(int windowHeight, const BoardMetrics& metrics)
+    float getGameCanvasY(int windowHeight, const BoardMetrics &metrics)
     {
         float y = (windowHeight - getGameCanvasHeight(metrics)) * 0.5f;
         return y < 16.0f ? 16.0f : y;
     }
 
-    float getBoardOriginX(int windowWidth, const BoardMetrics& metrics)
+    float getBoardOriginX(int windowWidth, const BoardMetrics &metrics)
     {
         return getGameCanvasX(windowWidth, metrics) + metrics.canvasMargin;
     }
 
-    float getBoardOriginY(int windowHeight, const BoardMetrics& metrics)
+    float getBoardOriginY(int windowHeight, const BoardMetrics &metrics)
     {
         return getGameCanvasY(windowHeight, metrics) + metrics.canvasMargin;
     }
 
-    float getSidebarX(int windowWidth, const BoardMetrics& metrics)
+    float getSidebarX(int windowWidth, const BoardMetrics &metrics)
     {
         return getBoardOriginX(windowWidth, metrics) + metrics.boardWidth + metrics.sidebarMargin;
     }
 
-    float getSidebarY(int windowHeight, const BoardMetrics& metrics)
+    float getSidebarY(int windowHeight, const BoardMetrics &metrics)
     {
         return getBoardOriginY(windowHeight, metrics);
     }
