@@ -20,7 +20,7 @@ if exist "C:\msys64\ucrt64\bin\g++.exe" (
 set "OPT_FLAGS=-O2"
 if /i "%BUILD_TYPE%"=="debug" set "OPT_FLAGS=-g -O0"
 
-set "SOURCES=main.cpp core/game.cpp core/gamestate.cpp gameplay/player.cpp gameplay/maze.cpp gameplay/collision.cpp gameplay/level.cpp gameplay/generator.cpp render/renderer.cpp render/text.cpp ui/hud.cpp ui/menu.cpp ui/overlay.cpp data/highscore.cpp data/leveldata.cpp utils/coords.cpp utils/timer.cpp"
+set "SOURCES=main.cpp core/game.cpp core/gamestate.cpp core/input.cpp core/settings.cpp gameplay/player.cpp gameplay/maze.cpp gameplay/collision.cpp gameplay/level.cpp gameplay/generator.cpp gameplay/generator_analysis.cpp render/renderer.cpp render/text.cpp ui/hud.cpp ui/menu.cpp ui/overlay.cpp data/highscore.cpp data/leveldata.cpp utils/coords.cpp utils/timer.cpp"
 
 "%CXX%" -o maze_runner.exe ^
     %SOURCES% ^

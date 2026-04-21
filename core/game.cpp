@@ -14,6 +14,8 @@
 #include <random>
 #include <ctime>
 
+using namespace InputManager;
+
 Game::Game()
     : cachedWinW(1180),
       cachedWinH(720),
@@ -64,6 +66,8 @@ void Game::beginNameEdit()
     gameState.settingsDraftName[Config::MAX_PLAYER_NAME_LENGTH] = '\0';
     gameState.settingsEditingName = true;
 }
+
+void Game::update()
 {
     timer.updateAnimationTime();
     updateHeldMovement();
@@ -255,15 +259,15 @@ void Game::tryMoveByTile(int colStep, int rowStep)
 
 int Game::computeStageScore(int elapsedMs, int parTimeMs) const
 {
-    int timeWindowMs = parTimeMs * Config::TIME_SCORE_WINDOW_MULTIPLIER;
-    int scoreValue = timeWindowMs - elapsedMs;
+    // int timeWindowMs = parTimeMs * Config::TIME_SCORE_WINDOW_MULTIPLIER;
+    // int scoreValue = timeWindowMs - elapsedMs;
 
-    if (scoreValue < 0)
-    {
-        scoreValue = 0;
-    }
+    // if (scoreValue < 0)
+    // {
+    //     scoreValue = 0;
+    // }
 
-    return scoreValue / Config::TIME_SCORE_DIVISOR_MS;
+    return elapsedMs;
 }
 
 void Game::clearMoveRepeatState()
@@ -415,14 +419,14 @@ void Game::applyMoveDirection(MoveDirection direction, bool isInitialMove)
         return;
     }
 
-    repeatedMoveDirection = getActiveHeldDirection();
-    if (repeatedMoveDirection == InputManager::MOVE_DIRECTION_NONE)
+    inputState.repeatedMoveDirection = getActiveHeldDirection();
+    if (inputState.repeatedMoveDirection == InputManager::MOVE_DIRECTION_NONE)
     {
-        nextRepeatedMoveMs = 0;
+        inputState.nextRepeatedMoveMs = 0;
         return;
     }
 
-    nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + InputManager::getRepeatDelayMs(isInitialMove);
+    inputState.nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + InputManager::getRepeatDelayMs(isInitialMove);
 }
 
 void Game::updateHeldMovement()
@@ -801,14 +805,14 @@ void Game::handleKeyUp(unsigned char key)
     }
 
     MoveDirection activeDirection = getActiveHeldDirection();
-    repeatedMoveDirection = activeDirection;
+    inputState.repeatedMoveDirection = activeDirection;
     if (activeDirection == MOVE_DIRECTION_NONE)
     {
-        nextRepeatedMoveMs = 0;
+        inputState.nextRepeatedMoveMs = 0;
     }
     else
     {
-        nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + Config::HOLD_MOVE_INITIAL_DELAY_MS;
+        inputState.nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + Config::HOLD_MOVE_INITIAL_DELAY_MS;
     }
 }
 
@@ -875,14 +879,14 @@ void Game::handleSpecialUp(int key)
     }
 
     MoveDirection activeDirection = getActiveHeldDirection();
-    repeatedMoveDirection = activeDirection;
+    inputState.repeatedMoveDirection = activeDirection;
     if (activeDirection == MOVE_DIRECTION_NONE)
     {
-        nextRepeatedMoveMs = 0;
+        inputState.nextRepeatedMoveMs = 0;
     }
     else
     {
-        nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + Config::HOLD_MOVE_INITIAL_DELAY_MS;
+        inputState.nextRepeatedMoveMs = glutGet(GLUT_ELAPSED_TIME) + Config::HOLD_MOVE_INITIAL_DELAY_MS;
     }
 }
 
